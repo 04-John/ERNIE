@@ -1,7 +1,6 @@
 from fastapi import APIRouter
 from app.core.state import app_state
 import pandas as pd
-import numpy as np
 
 router = APIRouter()
 
@@ -33,12 +32,8 @@ async def get_type_breakdown():
 
     df = pd.DataFrame(scores)
 
-    # fallback if type column missing
     if "type" not in df.columns or df["type"].isna().all():
-        types = ["Neobank","Remittance","B2B Payments",
-                 "Crypto Exchange","Savings App","BNPL","Payroll"]
-        np.random.seed(42)
-        df["type"] = np.random.choice(types, size=len(df))
+        return {"data": []}
 
     breakdown = (
         df.groupby("type")
@@ -51,34 +46,6 @@ async def get_type_breakdown():
     )
     breakdown["avg_volume_k"] = (breakdown["avg_volume"] / 1000).round(1)
     return {"data": breakdown.to_dict(orient="records")}
-
-@router.get("/debug/blockradar-raw")
-async def debug_blockradar():
-    """
-    Debug endpoint — shows raw Blockradar API response.
-    Remove before production.
-    """
-    from app.core.config import get_settings
-    settings = get_settings()
-
-    if settings.data_mode != "real":
-        return {"error": "Only available in DATA_MODE=real"}
-
-    from app.services.blockradar import BlockradarClient
-    client = BlockradarClient()
-
-    try:
-        wallet    = await client.get_wallet()
-        addresses = await client.get_addresses(page=1, limit=5)
-        txs       = await client.get_transactions(page=1, limit=5)
-
-        return {
-            "wallet":       wallet,
-            "addresses_raw": addresses,
-            "transactions_raw": txs,
-        }
-    except Exception as e:
-        return {"error": str(e)}
 
 @router.get("/status")
 async def get_status():

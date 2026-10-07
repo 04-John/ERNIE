@@ -9,16 +9,20 @@ GET  /auth/me        — get current user from token
 
 from fastapi import APIRouter, HTTPException, Depends, status
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
-from datetime import datetime, timezone
 
+from app.core.config import get_settings
 from app.core.database import get_db
+from app.models.user import User
 from app.services.auth import (
-    create_access_token, verify_token,
+    create_access_token, get_current_user, rate_limit_auth,
     get_user_by_email, get_user_by_google_id,
     create_user, authenticate_user, update_last_login,
+    MIN_PASSWORD_LENGTH,
 )
+
+settings = get_settings()
 
 router = APIRouter()
 
@@ -28,17 +32,17 @@ router = APIRouter()
 # ─────────────────────────────────────────────
 
 class RegisterRequest(BaseModel):
-    email: str
-    password: str
-    name:     Optional[str] = ""
-    company:  Optional[str] = ""
+    email: EmailStr
+    password: str = Field(max_length=128)
+    name:     Optional[str] = Field(default="", max_length=120)
+    company:  Optional[str] = Field(default="", max_length=120)
 
 class LoginRequest(BaseModel):
-    email:    str
-    password: str
+    email:    str = Field(max_length=254)
+    password: str = Field(max_length=128)
 
 class GoogleAuthRequest(BaseModel):
-    access_token: str  # Google OAuth access token from frontend
+    access_token: str = Field(max_length=4096)  # Google OAuth access token from frontend
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -50,8 +54,8 @@ class TokenResponse(BaseModel):
 # REGISTER
 # ─────────────────────────────────────────────
 
-@router.post("/register", response_model=TokenResponse)
-async def register(req: RegisterRequest, db: Session = Depends(get_db)):
+@router.post("/register", response_model=TokenResponse, dependencies=[Depends(rate_limit_auth)])
+def register(req: RegisterRequest, db: Session = Depends(get_db)):
     # check if email already exists
     if get_user_by_email(db, req.email):
         raise HTTPException(
@@ -59,10 +63,10 @@ async def register(req: RegisterRequest, db: Session = Depends(get_db)):
             detail="An account with this email already exists."
         )
 
-    if len(req.password) < 6:
+    if len(req.password) < MIN_PASSWORD_LENGTH:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Password must be at least 6 characters."
+            detail="Password must be at least 8 characters."
         )
 
     user = create_user(
@@ -92,8 +96,8 @@ async def register(req: RegisterRequest, db: Session = Depends(get_db)):
 # LOGIN
 # ─────────────────────────────────────────────
 
-@router.post("/login", response_model=TokenResponse)
-async def login(req: LoginRequest, db: Session = Depends(get_db)):
+@router.post("/login", response_model=TokenResponse, dependencies=[Depends(rate_limit_auth)])
+def login(req: LoginRequest, db: Session = Depends(get_db)):
     user = authenticate_user(db, req.email, req.password)
 
     if not user:
@@ -121,21 +125,36 @@ async def login(req: LoginRequest, db: Session = Depends(get_db)):
 # GOOGLE AUTH
 # ─────────────────────────────────────────────
 
-@router.post("/google", response_model=TokenResponse)
+@router.post("/google", response_model=TokenResponse, dependencies=[Depends(rate_limit_auth)])
 async def google_auth(req: GoogleAuthRequest, db: Session = Depends(get_db)):
     """
-    Receives Google access token from frontend,
-    fetches user info from Google, creates/finds user,
-    returns our JWT.
+    Receives a Google access token from the frontend, verifies it was issued
+    for OUR client id (prevents tokens minted for other apps being replayed),
+    fetches the profile, creates/finds the user and returns our JWT.
     """
     import httpx
 
+    if not settings.google_client_id:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google sign-in is not configured.",
+        )
+
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=10) as client:
+            info = await client.get(
+                "https://oauth2.googleapis.com/tokeninfo",
+                params={"access_token": req.access_token},
+            )
+            info.raise_for_status()
+            token_info = info.json()
+
+            if token_info.get("aud") != settings.google_client_id:
+                raise ValueError("token audience mismatch")
+
             resp = await client.get(
                 "https://www.googleapis.com/oauth2/v3/userinfo",
                 headers={"Authorization": f"Bearer {req.access_token}"},
-                timeout=10,
             )
             resp.raise_for_status()
             google_user = resp.json()
@@ -154,24 +173,26 @@ async def google_auth(req: GoogleAuthRequest, db: Session = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Could not retrieve email from Google."
         )
+    if not google_user.get("email_verified"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Your Google email address is not verified."
+        )
 
     # find or create user
     user = get_user_by_google_id(db, google_id)
     if not user:
         user = get_user_by_email(db, email)
         if user:
-            # existing email account — link Google
-            user.google_id  = google_id
+            # existing email account — link Google (email is Google-verified)
+            user.google_id   = google_id
             user.is_verified = True
             db.commit()
         else:
-            # brand new user
-            user = create_user(
-                db=db,
-                email=email,
-                name=name,
-                google_id=google_id,
-            )
+            user = create_user(db=db, email=email, name=name, google_id=google_id)
+
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account disabled.")
 
     token = create_access_token({"sub": user.id, "email": user.email})
     update_last_login(db, user)
@@ -193,23 +214,7 @@ async def google_auth(req: GoogleAuthRequest, db: Session = Depends(get_db)):
 # ─────────────────────────────────────────────
 
 @router.get("/me")
-async def get_me(
-    authorization: Optional[str] = None,
-    db: Session = Depends(get_db)
-):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    token = authorization.replace("Bearer ", "")
-    payload = verify_token(token)
-
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-
-    user = get_user_by_email(db, payload.get("email"))
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
+def get_me(user: User = Depends(get_current_user)):
     return {
         "id":         user.id,
         "email":      user.email,

@@ -1,38 +1,50 @@
 """
 Auth Service
 ============
-Handles password hashing, JWT token creation/verification,
-and user authentication logic.
+Password hashing (bcrypt), JWT creation/verification, user lookups,
+a FastAPI dependency that protects routes, and a tiny login rate limiter.
 """
 
+import time
+from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+
+import bcrypt
 import jwt
 from jwt.exceptions import InvalidTokenError as JWTError
-from passlib.context import CryptContext
+from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
+
 from app.core.config import get_settings
+from app.core.database import get_db
 from app.models.user import User
 
 settings = get_settings()
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-ALGORITHM    = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 1 day
+MIN_PASSWORD_LENGTH = 8
 
 
 # ─────────────────────────────────────────────
 # PASSWORD
 # ─────────────────────────────────────────────
 
+def _pw_bytes(password: str) -> bytes:
+    # bcrypt only uses the first 72 bytes
+    return password.encode("utf-8")[:72]
+
+
 def hash_password(password: str) -> str:
-    # bcrypt has a 72-byte limit — truncate safely
-    return pwd_context.hash(password[:72])
+    return bcrypt.hashpw(_pw_bytes(password), bcrypt.gensalt()).decode()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain[:72], hashed)
+    try:
+        return bcrypt.checkpw(_pw_bytes(plain), hashed.encode())
+    except ValueError:
+        return False
 
 
 # ─────────────────────────────────────────────
@@ -50,8 +62,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 def verify_token(token: str):
     try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
-        return payload
+        return jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
     except JWTError:
         return None
 
@@ -61,7 +72,11 @@ def verify_token(token: str):
 # ─────────────────────────────────────────────
 
 def get_user_by_email(db: Session, email: str) -> Optional[User]:
-    return db.query(User).filter(User.email == email).first()
+    return db.query(User).filter(User.email == email.strip().lower()).first()
+
+
+def get_user_by_id(db: Session, user_id: str) -> Optional[User]:
+    return db.query(User).filter(User.id == user_id).first()
 
 
 def get_user_by_google_id(db: Session, google_id: str) -> Optional[User]:
@@ -77,7 +92,7 @@ def create_user(
     google_id: str = None,
 ) -> User:
     user = User(
-        email=email,
+        email=email.strip().lower(),
         name=name,
         company=company,
         hashed_password=hash_password(password) if password else None,
@@ -90,13 +105,16 @@ def create_user(
     return user
 
 
+# Pre-computed hash so unknown-email logins cost the same as wrong-password ones
+_DUMMY_HASH = hash_password("dummy-password-for-timing")
+
+
 def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
     user = get_user_by_email(db, email)
-    if not user:
+    if not user or not user.hashed_password:
+        verify_password(password, _DUMMY_HASH)
         return None
-    if not user.hashed_password:
-        return None  # Google OAuth user — can't login with password
-    if not verify_password(password, user.hashed_password):
+    if not user.is_active or not verify_password(password, user.hashed_password):
         return None
     return user
 
@@ -104,3 +122,49 @@ def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
 def update_last_login(db: Session, user: User) -> None:
     user.last_login = datetime.now(timezone.utc)
     db.commit()
+
+
+# ─────────────────────────────────────────────
+# ROUTE PROTECTION
+# ─────────────────────────────────────────────
+
+def get_current_user(
+    authorization: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+) -> User:
+    """Dependency: require a valid `Authorization: Bearer <jwt>` header."""
+    unauthorized = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Not authenticated",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    if not authorization or not authorization.startswith("Bearer "):
+        raise unauthorized
+    payload = verify_token(authorization[7:])
+    if not payload or not payload.get("sub"):
+        raise unauthorized
+    user = get_user_by_id(db, payload["sub"])
+    if not user or not user.is_active:
+        raise unauthorized
+    return user
+
+
+# ─────────────────────────────────────────────
+# RATE LIMIT (in-memory, per client IP — single-process only)
+# ─────────────────────────────────────────────
+
+_attempts: dict = defaultdict(deque)
+
+
+def rate_limit_auth(request: Request, limit: int = 10, window: int = 60) -> None:
+    ip = request.client.host if request.client else "unknown"
+    now = time.monotonic()
+    q = _attempts[ip]
+    while q and now - q[0] > window:
+        q.popleft()
+    if len(q) >= limit:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many attempts. Try again in a minute.",
+        )
+    q.append(now)

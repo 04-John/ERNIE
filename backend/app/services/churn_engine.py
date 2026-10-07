@@ -10,7 +10,7 @@ import joblib
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.preprocessing import LabelEncoder
@@ -25,7 +25,16 @@ MODEL_PATH = Path(__file__).parent.parent.parent / "models" / "churn_model.jobli
 # FEATURE ENGINEERING
 # ─────────────────────────────────────────────
 
-def build_features(addresses: List[Dict], transactions: List[Dict]) -> pd.DataFrame:
+def _to_naive_utc(series: pd.Series) -> pd.Series:
+    """Parse mixed tz-aware/naive timestamps into naive UTC (safe to compare)."""
+    return pd.to_datetime(series, errors="coerce", utc=True).dt.tz_convert(None)
+
+
+def build_features(
+    addresses: List[Dict],
+    transactions: List[Dict],
+    as_of: pd.Timestamp = END_DATE,
+) -> pd.DataFrame:
     addr_df = pd.DataFrame(addresses)
     
     if addr_df.empty:
@@ -59,8 +68,8 @@ def build_features(addresses: List[Dict], transactions: List[Dict]) -> pd.DataFr
     if "createdAt" not in tx_df.columns:
         tx_df["createdAt"] = pd.Timestamp.now()
     else:
-        tx_df["createdAt"] = pd.to_datetime(tx_df["createdAt"], errors="coerce")
-        tx_df["createdAt"] = tx_df["createdAt"].fillna(pd.Timestamp.now())
+        tx_df["createdAt"] = _to_naive_utc(tx_df["createdAt"])
+        tx_df["createdAt"] = tx_df["createdAt"].fillna(as_of)
 
     success = tx_df[tx_df["status"] == "SUCCESS"] if "status" in tx_df.columns else tx_df
 
@@ -81,13 +90,15 @@ def build_features(addresses: List[Dict], transactions: List[Dict]) -> pd.DataFr
     ).reset_index().rename(columns={"_fintechId": "fintech_id"})
 
     tx_stats["days_since_last_tx"] = (
-        END_DATE - tx_stats["last_tx_date"]
+        as_of - tx_stats["last_tx_date"]
     ).dt.days
 
-    recent = success[success["createdAt"] >= pd.Timestamp("2025-12-01")]
+    recent_start = as_of - pd.DateOffset(months=3)
+    prior_start  = as_of - pd.DateOffset(months=6)
+    recent = success[success["createdAt"] >= recent_start]
     prior  = success[
-        (success["createdAt"] >= pd.Timestamp("2025-09-01")) &
-        (success["createdAt"] < pd.Timestamp("2025-12-01"))
+        (success["createdAt"] >= prior_start) &
+        (success["createdAt"] < recent_start)
     ]
 
     recent_vol = recent.groupby("_fintechId")["amountUsd"].sum().rename("vol_recent_3m")
@@ -217,7 +228,7 @@ def train_model(features: pd.DataFrame) -> None:
     # save model
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, MODEL_PATH)
-    print(f"  Model saved → {MODEL_PATH}")
+    print(f"  Model saved -> {MODEL_PATH}")
 
 
 # ─────────────────────────────────────────────
@@ -240,7 +251,7 @@ def compute_summary(
             "high_risk_fintechs": 0,
             "medium_risk_fintechs": 0,
             "low_risk_fintechs": 0,
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
         }
 
     success_tx = [t for t in transactions if t.get("status") == "SUCCESS"] if transactions else []
@@ -256,7 +267,7 @@ def compute_summary(
         "high_risk_fintechs":  int((scored["churn_risk"] == "High").sum())   if not scored.empty else 0,
         "medium_risk_fintechs":int((scored["churn_risk"] == "Medium").sum()) if not scored.empty else 0,
         "low_risk_fintechs":   int((scored["churn_risk"] == "Low").sum())    if not scored.empty else 0,
-        "generated_at":        datetime.utcnow().isoformat(),
+        "generated_at":        datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -286,7 +297,7 @@ def compute_monthly_volume(transactions: List[Dict]) -> List[Dict]:
     if tx_df.empty:
         return []
 
-    tx_df["createdAt"] = pd.to_datetime(tx_df["createdAt"], errors="coerce")
+    tx_df["createdAt"] = _to_naive_utc(tx_df["createdAt"])
     tx_df = tx_df.dropna(subset=["createdAt"])
 
     if tx_df.empty:
@@ -353,7 +364,11 @@ def compute_regional_summary(
 # MAIN ENTRY POINT
 # ─────────────────────────────────────────────
 
-def run_churn_pipeline(addresses: List[Dict], transactions: List[Dict]) -> Dict:
+def run_churn_pipeline(
+    addresses: List[Dict],
+    transactions: List[Dict],
+    as_of: pd.Timestamp = END_DATE,
+) -> Dict:
     """
     Full pipeline:
       1. Build features
@@ -364,7 +379,7 @@ def run_churn_pipeline(addresses: List[Dict], transactions: List[Dict]) -> Dict:
     """
     print("\nRunning churn pipeline...")
 
-    features = build_features(addresses, transactions)
+    features = build_features(addresses, transactions, as_of)
     print(f"  Features built for {len(features)} fintechs")
 
     scored = score_churn(features)
@@ -372,7 +387,8 @@ def run_churn_pipeline(addresses: List[Dict], transactions: List[Dict]) -> Dict:
           f"Medium={(scored.churn_risk=='Medium').sum()} "
           f"Low={(scored.churn_risk=='Low').sum()}")
 
-    train_model(scored)
+    # NOTE: train_model() is intentionally not called — it trains on labels derived
+    # from the rule-based score itself (circular) and nothing loads the result.
 
     summary = compute_summary(addresses, transactions, scored)
     monthly = compute_monthly_volume(transactions)

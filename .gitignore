@@ -55,3 +55,8 @@ desktop.ini
 # Logs
 *.log
 logs/
+# Local DBs / generated models
+*.db
+backend/models/
+!.env.example
+!frontend/.env.example

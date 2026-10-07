@@ -35,11 +35,13 @@ async def run_pipeline_job():
                 raise Exception("No addresses returned")
         else:
             from app.services.simulator import run_simulation
-            raw          = run_simulation()
+            raw          = await asyncio.to_thread(run_simulation)
             addresses    = raw["addresses"]
             transactions = raw["transactions"]
 
-        results = run_churn_pipeline(addresses, transactions)
+        import pandas as pd
+        kwargs = {"as_of": pd.Timestamp.now()} if settings.data_mode == "real" else {}
+        results = await asyncio.to_thread(run_churn_pipeline, addresses, transactions, **kwargs)
         app_state.update(results)
         app_state["raw"] = {"addresses": addresses, "transactions": transactions}
         app_state["last_refreshed"] = datetime.utcnow().isoformat()

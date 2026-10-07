@@ -8,7 +8,7 @@ Built using Blockradar as a case study.
 
 ## What it does
 
-- **Churn Risk Scoring** — ML model that scores every fintech by probability of going inactive
+- **Churn Risk Scoring** — rule-based model that scores every fintech by probability of going inactive
 - **Wallet Dormancy Tracking** — identifies wallets with no activity in 60+ days
 - **Regional Performance** — Africa, LatAm, Middle East & Southeast Asia breakdown
 - **Transaction Volume Trends** — 18-month regional volume analysis
@@ -21,7 +21,7 @@ Built using Blockradar as a case study.
 | Layer | Technology |
 |---|---|
 | Backend API | FastAPI (Python) |
-| ML Pipeline | scikit-learn, pandas, numpy |
+| Scoring | Rule-based churn scoring (pandas, numpy) |
 | Database | PostgreSQL + SQLAlchemy |
 | Frontend | React + Recharts |
 | Auth | Google OAuth + JWT |
@@ -32,43 +32,41 @@ Built using Blockradar as a case study.
 
 ## Getting Started
 
-### 1. Clone the repo
+### 1. Configure environment
 ```bash
-git clone https://github.com/John-04/Blockradar-Intelligence.git
-cd Blockradar-Intelligence
+cp .env.example backend/.env        # Windows: copy .env.example backend\.env
+cp frontend/.env.example frontend/.env
 ```
+Set `SECRET_KEY` (32+ chars: `python -c "import secrets; print(secrets.token_urlsafe(48))"`).
+Leave `DATABASE_URL` unset to use local SQLite; set `DATA_MODE=real` plus the Blockradar keys for live data.
 
-### 2. Configure environment
-```bash
-# Backend
-cd backend
-copy .env.example .env
-# Fill in BLOCKRADAR_API_KEY, BLOCKRADAR_WALLET_ID, POSTGRES_PASSWORD
-
-# Frontend
-cd ../frontend
-# Add VITE_GOOGLE_CLIENT_ID to frontend/.env
-```
-
-### 3. Run the backend
+### 2. Run the backend (Python 3.11)
 ```bash
 cd backend
 python -m venv venv
-venv\Scripts\activate
+venv\Scriptsctivate          # macOS/Linux: source venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-### 4. Run the frontend
+### 3. Run the frontend
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+Open http://localhost:5173 (with `DEBUG=true`, API docs are at http://localhost:8000/docs).
 
-### 5. Open the dashboard
+### Docker
+```bash
+cp .env.example .env   # set SECRET_KEY, POSTGRES_PASSWORD, ...
+docker compose up --build
+```
 
-http://localhost:5173
+### Deploy (Render)
+`render.yaml` is a Blueprint: API + Postgres + static site. After the first deploy set
+`CORS_ORIGINS` (API) to the site URL and `VITE_API_BASE_URL` (site) to the API URL, then redeploy the site.
+Google sign-in also needs the site URL added to *Authorized JavaScript origins* in Google Cloud Console.
 
 ---
 
@@ -85,7 +83,7 @@ http://localhost:5173
 | GET | `/wallets/dormancy` | Dormancy stats by region |
 | GET | `/wallets/activity` | Raw wallet activity |
 
-Full interactive docs at `http://localhost:8000/docs`
+All endpoints except `/auth/*` and `/health` require a Bearer token. Interactive docs at `/docs` when `DEBUG=true`.
 
 ---
 
@@ -93,7 +91,7 @@ Full interactive docs at `http://localhost:8000/docs`
 
 Set `DATA_MODE` in `backend/.env`:
 
-- `simulated` — generates 100k wallets & 150k transactions for demo
+- `simulated` — generates 100k wallets & ~60k transactions for demo
 - `real` — connects to your live Blockradar account via API
 
 ---
@@ -117,4 +115,4 @@ I built the solution and sent it as my pitch.
 
 ---
 
-*Built by [@John-04](https://github.com/John-04) · April 2026*
+*Built April 2026*

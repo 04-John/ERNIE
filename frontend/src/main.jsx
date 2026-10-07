@@ -14,7 +14,7 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { refetchOnWindowFocus: false, retry: 1, staleTime: 30_000 } },
 })
 
-const GOOGLE_CLIENT_ID = '1051621212785-8ijv8bvffbgsqn2tsha5c7u1jh79lngv.apps.googleusercontent.com'
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

@@ -126,7 +126,7 @@ def generate_addresses(n: int = 100_000) -> List[Dict]:
                 "_country": country,
             })
 
-    print(f"  → {len(addresses):,} addresses generated")
+    print(f"  -> {len(addresses):,} addresses generated")
     return addresses
 
 
@@ -174,7 +174,7 @@ def generate_transactions(addresses: List[Dict], max_per_address: int = 60) -> L
                 "_region": addr["_region"],
             })
 
-    print(f"  → {len(transactions):,} transactions generated")
+    print(f"  -> {len(transactions):,} transactions generated")
     return transactions
 
 

@@ -1,8 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.core.config import get_settings
 from app.api.routes import analytics, churn, wallets, auth
+from app.services.auth import get_current_user
+import asyncio
 from datetime import datetime
 
 settings = get_settings()
@@ -14,14 +16,15 @@ async def lifespan(app: FastAPI):
     print("  BLOCKRADAR INTELLIGENCE API")
     print("=" * 55)
     print(f"  Mode     : {settings.data_mode.upper()}")
-    print(f"  Docs     : http://localhost:{settings.api_port}/docs")
+    if settings.debug:
+        print(f"  Docs     : http://localhost:{settings.api_port}/docs")
     print("=" * 55)
 
     # create database tables
     from app.core.database import create_tables
     from app.models import user, wallet, transaction  # import models so SQLAlchemy sees them
     create_tables()
-    print("  ✓ Database tables ready")
+    print("  OK Database tables ready")
 
     from app.core.state import app_state
     from app.services.churn_engine import run_churn_pipeline
@@ -37,34 +40,36 @@ async def lifespan(app: FastAPI):
             if not alive:
                 raise Exception("API key invalid or wallet ID wrong — falling back to simulation")
 
-            print("  ✓ Blockradar API connected")
+            print("  OK Blockradar API connected")
 
             # fetch real addresses and transactions
             print("  Fetching addresses...")
             addresses_raw = await client.get_all_addresses()
-            print(f"  → {len(addresses_raw)} addresses fetched")
+            print(f"  -> {len(addresses_raw)} addresses fetched")
 
             print("  Fetching transactions...")
             transactions_raw = await client.get_all_transactions(max_pages=20)
-            print(f"  → {len(transactions_raw)} transactions fetched")
+            print(f"  -> {len(transactions_raw)} transactions fetched")
 
             # normalize to our internal format
             addresses = _normalize_addresses(addresses_raw, settings.blockradar_wallet_id)
             transactions = _normalize_transactions(transactions_raw)
 
             print(f"  Normalized: {len(addresses)} addresses, {len(transactions)} transactions")
+            used_real_data = True
             # if real API returns no data yet, fall back to simulation
             if len(addresses) == 0:
-              print("\n  ⚠ No addresses found in your Blockradar wallet yet.")
+              print("\n  WARN No addresses found in your Blockradar wallet yet.")
               print("  This is normal for a new account.")
               print("  Falling back to SIMULATED data for dashboard demo...\n")
               from app.services.simulator import run_simulation
               raw = run_simulation()
               addresses = raw["addresses"]
               transactions = raw["transactions"]
+              used_real_data = False
 
         except Exception as e:
-            print(f"\n  ⚠ Real data fetch failed: {e}")
+            print(f"\n  WARN Real data fetch failed: {e}")
             print("  Falling back to SIMULATED data...\n")
             from app.services.simulator import run_simulation
             raw = run_simulation()
@@ -85,7 +90,6 @@ async def lifespan(app: FastAPI):
 
     # start background scheduler
     from app.core.scheduler import start_scheduler
-    import asyncio
     task = asyncio.create_task(start_scheduler())
     app_state["scheduler_task"] = task
     app_state["last_refreshed"] = datetime.utcnow().isoformat()
@@ -216,32 +220,31 @@ app = FastAPI(
     description="Wallet analytics, churn prediction & retention insights.",
     version="1.0.0",
     lifespan=lifespan,
+    # interactive docs only in debug — they advertise every route
+    docs_url="/docs" if settings.debug else None,
+    redoc_url=None,
+    openapi_url="/openapi.json" if settings.debug else None,
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=settings.cors_origin_list,
+    allow_credentials=False,  # JWT is sent in the Authorization header, not cookies
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 app.include_router(auth.router,      prefix="/auth",      tags=["Auth"])
-app.include_router(analytics.router, prefix="/analytics", tags=["Analytics"])
-app.include_router(churn.router,     prefix="/churn",     tags=["Churn"])
-app.include_router(wallets.router,   prefix="/wallets",   tags=["Wallets"])
+_protected = [Depends(get_current_user)]
+app.include_router(analytics.router, prefix="/analytics", tags=["Analytics"], dependencies=_protected)
+app.include_router(churn.router,     prefix="/churn",     tags=["Churn"],     dependencies=_protected)
+app.include_router(wallets.router,   prefix="/wallets",   tags=["Wallets"],   dependencies=_protected)
 
 
 @app.get("/", tags=["Health"])
 async def root():
-    return {
-        "service": "Blockradar Intelligence API",
-        "version": "1.0.0",
-        "status": "running",
-        "mode": settings.data_mode,
-        "docs": "/docs",
-    }
+    return {"service": "Blockradar Intelligence API", "status": "running"}
 
 @app.get("/health", tags=["Health"])
 async def health():
-    return {"status": "ok", "mode": settings.data_mode}
+    return {"status": "ok"}

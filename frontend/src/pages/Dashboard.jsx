@@ -12,6 +12,7 @@ import VolumeChart from '../components/VolumeChart'
 import RegionalMap from '../components/RegionalMap'
 import WalletActivity from '../components/WalletActivity'
 import ChurnTable from '../components/ChurnTable'
+import { BASE_URL } from '../api/client'
 import { useSummary, useDistribution, useTypeBreakdown } from '../hooks/useAnalytics'
 
 // ── Sidebar Nav Item
@@ -458,7 +459,6 @@ function MainContent({ active }) {
           <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 4, background: 'var(--green-dim)', color: 'var(--green)', fontFamily: 'monospace', flexShrink: 0 }}>{e.method}</span>
           <code style={{ fontSize: 13, color: 'var(--text-primary)', flex: 1, fontFamily: 'monospace' }}>{e.path}</code>
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{e.desc}</span>
-          <a href={`http://localhost:8000${e.path}`} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: 'var(--green)', whiteSpace: 'nowrap' }}>Try it →</a>
         </div>
       ))}
     </div>
@@ -472,7 +472,7 @@ function MainContent({ active }) {
         <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.03em', textTransform: 'uppercase', lineHeight: 1.1, marginBottom: 8 }}>Settings</h1>
       </div>
       {[
-        { label: 'API Base URL',     value: 'http://localhost:8000',    tag: 'Backend' },
+        { label: 'API Base URL',     value: BASE_URL,    tag: 'Backend' },
         { label: 'Data Mode',        value: 'Simulated',                tag: 'Pipeline' },
         { label: 'Database',         value: 'blockradar-intelligence',  tag: 'PostgreSQL' },
         { label: 'Pipeline Schedule',value: 'Every 6 hours',            tag: 'Cron' },
@@ -512,7 +512,7 @@ function MainContent({ active }) {
           fontSize: 12, color: 'var(--text-secondary)',
           fontFamily: 'monospace', overflowX: 'auto', lineHeight: 1.8,
         }}>{`# 1. Clone the repo
-git clone https://github.com/your-org/blockradar-intelligence
+git clone <your-repo-url>
 
 # 2. Configure environment
 cp .env.example .env
@@ -537,7 +537,7 @@ cd frontend && npm install && npm run dev
           borderRadius: 8, padding: '12px 16px',
         }}>
           <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: 'var(--green-dim)', color: 'var(--green)', fontFamily: 'monospace', fontWeight: 700 }}>BASE</span>
-          <code style={{ fontSize: 13, fontFamily: 'monospace', color: 'var(--text-primary)' }}>http://localhost:8000</code>
+          <code style={{ fontSize: 13, fontFamily: 'monospace', color: 'var(--text-primary)' }}>{BASE_URL}</code>
           <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>All endpoints are prefixed with this URL</span>
         </div>
       </div>
@@ -588,10 +588,6 @@ cd frontend && npm install && npm run dev
                   <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: 'var(--green-dim)', color: 'var(--green)', fontFamily: 'monospace' }}>{ep.method}</span>
                   <code style={{ fontSize: 13, fontFamily: 'monospace', fontWeight: 600 }}>{ep.path}</code>
                   <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 4 }}>— {ep.desc}</span>
-                  <a href={`http://localhost:8000${ep.path}`} target="_blank" rel="noreferrer"
-                    style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--green)', whiteSpace: 'nowrap' }}>
-                    Try it →
-                  </a>
                 </div>
                 <div style={{ display: 'flex', gap: 20, fontSize: 11, color: 'var(--text-muted)' }}>
                   <span><strong style={{ color: 'var(--text-secondary)' }}>Params:</strong> {ep.params}</span>
@@ -609,7 +605,7 @@ cd frontend && npm install && npm run dev
         border: '1px solid #f59e0b30', borderRadius: 10,
         fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7,
       }}>
-        <strong style={{ color: 'var(--amber)' }}>Authentication:</strong> All endpoints require your <code style={{ fontFamily: 'monospace', color: 'var(--text-primary)' }}>BLOCKRADAR_API_KEY</code> to be set in your <code style={{ fontFamily: 'monospace', color: 'var(--text-primary)' }}>.env</code> file. The backend passes this key when calling the Blockradar API. Add it via <strong>Settings → API Configuration</strong>.
+        <strong style={{ color: 'var(--amber)' }}>Authentication:</strong> All endpoints require an <code style={{ fontFamily: 'monospace', color: 'var(--text-primary)' }}>Authorization: Bearer &lt;token&gt;</code> header (obtained from <code style={{ fontFamily: 'monospace', color: 'var(--text-primary)' }}>POST /auth/login</code>). The backend reads <code style={{ fontFamily: 'monospace', color: 'var(--text-primary)' }}>BLOCKRADAR_API_KEY</code> from its environment to call Blockradar; it is never exposed to the browser.
       </div>
     </div>
   )
