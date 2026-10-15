@@ -240,19 +240,6 @@ export default function Login({ onLogin, onSignup }) {
             </div>
           )}
 
-          {/* Forgot */}
-          <div style={{ textAlign: 'right', marginTop: -8 }}>
-            <span
-                onClick={() => {
-                const email = prompt('Enter your email address:')
-                if (email) alert(`Password reset link sent to ${email}. Check your inbox.`)
-                }}
-                style={{ fontSize: 12, color: 'var(--green)', cursor: 'pointer' }}
-            >
-                Forgot password?
-            </span>
-            </div>
-
           {/* Submit */}
           <button type="submit" disabled={loading} style={{
             width: '100%', padding: '13px',
@@ -282,16 +269,6 @@ export default function Login({ onLogin, onSignup }) {
             Create one free
           </span>
         </p>
-
-        {/* Demo note */}
-        <div style={{
-          marginTop: 32, padding: '12px 16px',
-          background: 'var(--green-dim)', border: '1px solid #8DFF1C25',
-          borderRadius: 8, fontSize: 12, color: 'var(--text-secondary)',
-          lineHeight: 1.6,
-        }}>
-          <span style={{ color: 'var(--green)', fontWeight: 700 }}>Demo mode:</span> Use any email and password to sign in and explore the dashboard.
-        </div>
       </div>
     </div>
   )
