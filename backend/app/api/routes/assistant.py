@@ -23,7 +23,7 @@ from app.core.database import get_db
 from app.core.state import DEMO_KEY
 from app.models.organization import Organization
 from app.models.user import User
-from app.services import assistant, plans
+from app.services import assistant, plans, audit
 from app.services.auth import get_current_user, rate_limit_key
 
 settings = get_settings()
@@ -93,6 +93,7 @@ async def set_enabled(req: SettingsRequest, admin: User = Depends(require_admin)
     org = _org(db, ctx)
     org.ai_enabled = req.enabled
     db.commit()
+    audit.record(db, org.id, admin, "ai.enabled" if req.enabled else "ai.disabled", "Ask ERNIE turned " + ("on" if req.enabled else "off"))
     return {"enabled": bool(org.ai_enabled)}
 
 

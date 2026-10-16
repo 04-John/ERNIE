@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { LayoutDashboard, BarChart3, Wallet, Code2, Settings, LogOut, Menu, Sun, Moon, ChevronDown, Lightbulb, Sparkles } from 'lucide-react'
+import { LayoutDashboard, BarChart3, Wallet, Code2, Settings, LogOut, Menu, Sun, Moon, ChevronDown, Lightbulb, Sparkles, ShieldCheck } from 'lucide-react'
 import Logo from '../components/Logo'
 import DataStatus from '../components/DataStatus'
 import Notifications from '../components/Notifications'
@@ -14,6 +14,7 @@ const Overview   = lazy(() => import('./Overview'))
 const Analytics  = lazy(() => import('./Analytics'))
 const Insights   = lazy(() => import('./Insights'))
 const Assistant  = lazy(() => import('./Assistant'))
+const Admin      = lazy(() => import('./Admin'))
 const Wallets    = lazy(() => import('./Wallets'))
 const Developers = lazy(() => import('./Developers'))
 const FintechDetail = lazy(() => import('./FintechDetail'))
@@ -28,7 +29,8 @@ const NAV = [
   { id: 'developers', label: 'Developers', icon: Code2 },
 ]
 const BOTTOM = [{ id: 'settings', label: 'Settings', icon: Settings }]
-const ALL = [...NAV, ...BOTTOM]
+const ADMIN = { id: 'admin', label: 'Admin', icon: ShieldCheck }          // shown only to platform admins; the server enforces it
+const ALL = [...NAV, ADMIN, ...BOTTOM]
 
 // "#/analytics" -> { id: 'analytics' }   "#/fintech/abc" -> { id: 'fintech', param: 'abc' }
 const parseHash = () => {
@@ -140,7 +142,7 @@ export default function Dashboard({ theme, setTheme, user, onLogout }) {
     return () => document.removeEventListener('keydown', onKey)
   }, [drawer])
 
-  const Page = { overview: Overview, insights: Insights, assistant: Assistant, analytics: Analytics, wallets: Wallets, developers: Developers, settings: SettingsPage, fintech: FintechDetail }[route]
+  const Page = { overview: Overview, insights: Insights, assistant: Assistant, analytics: Analytics, wallets: Wallets, developers: Developers, settings: SettingsPage, fintech: FintechDetail, admin: Admin }[route]
 
   return (
     <div className="shell">
@@ -155,7 +157,7 @@ export default function Dashboard({ theme, setTheme, user, onLogout }) {
 
         <div className="sidebar-foot">
           <nav className="nav">
-            {BOTTOM.map(item => <NavLink key={item.id} item={item} active={navId === item.id} onNavigate={closeDrawer} />)}
+            {[...(user?.platform_admin ? [ADMIN] : []), ...BOTTOM].map(item => <NavLink key={item.id} item={item} active={navId === item.id} onNavigate={closeDrawer} />)}
             <button className="nav-item btn-danger" style={{ width: '100%', textAlign: 'left' }} onClick={onLogout}>
               <LogOut size={18} strokeWidth={1.8} /> Sign out
             </button>

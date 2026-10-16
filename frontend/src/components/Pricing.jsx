@@ -12,7 +12,7 @@ export default function Pricing({ current, onChoose, busyPlan, ctaLabel }) {
         const isCurrent = current === p.id
         return (
           <div className="lp-card" key={p.id} style={{ display: 'flex', flexDirection: 'column', borderColor: featured ? 'var(--accent)' : undefined }}>
-            {featured && <span className="badge tone-accent" style={{ alignSelf: 'flex-start', marginBottom: 10 }}>Most popular</span>}
+            <span className="badge tone-accent" style={{ alignSelf: 'flex-start', marginBottom: 10, visibility: featured ? 'visible' : 'hidden' }} aria-hidden={!featured}>Most popular</span>
             <h3>{p.name}</h3>
             <p style={{ minHeight: 44 }}>{p.tagline}</p>
             <div style={{ margin: '14px 0 18px' }}>

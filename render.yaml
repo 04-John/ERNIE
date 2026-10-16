@@ -32,6 +32,9 @@ services:
       # Optional: enables the Ask ERNIE assistant (opt-in per workspace). Needs credit on the Anthropic account.
       - key: ANTHROPIC_API_KEY
         sync: false
+      # Optional: comma-separated emails that can open the platform admin console (must be verified accounts)
+      - key: PLATFORM_ADMIN_EMAILS
+        sync: false
       # Optional: paid plans via Stripe. Webhook endpoint to register in Stripe: <API URL>/billing/webhook
       - key: STRIPE_SECRET_KEY
         sync: false

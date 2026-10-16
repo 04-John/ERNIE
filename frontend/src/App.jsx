@@ -5,6 +5,7 @@ import Signup from './pages/Signup'
 import Dashboard from './pages/Dashboard'
 import Landing from './pages/Landing'
 import { ForgotPassword, ResetPassword, VerifyEmail } from './pages/PasswordPages'
+import { Terms, Privacy, Status } from './pages/PublicPages'
 import Logo from './components/Logo'
 import { getMe, TOKEN_KEY } from './api/client'
 
@@ -25,8 +26,17 @@ const RESET_TOKEN = PARAMS.get('reset') || ''
 const VERIFY_TOKEN = PARAMS.get('verify') || ''
 const cleanUrl = () => window.history.replaceState({}, '', window.location.pathname + window.location.hash)
 
+const PUBLIC_PAGES = { terms: Terms, privacy: Privacy, status: Status }
+const publicPage = () => window.location.hash.replace(/^#\/?/, '').split('?')[0]
+
 export default function App() {
   const [theme, setTheme] = useState(initialTheme)
+  const [page, setPage] = useState(publicPage)
+  useEffect(() => {
+    const onHash = () => setPage(publicPage())
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
   // loading | landing | login | signup | forgot | reset | verify | app. Only 'loading' if a saved token needs validating.
   const [view, setView]   = useState(() => (
     RESET_TOKEN ? 'reset'
@@ -83,6 +93,8 @@ export default function App() {
   }
 
   const toggleTheme = () => setTheme(t => (t === 'dark' ? 'light' : 'dark'))
+  const PublicPage = PUBLIC_PAGES[page]
+  if (PublicPage) return <PublicPage theme={theme} onToggleTheme={toggleTheme} />          // terms, privacy and status are readable signed in or out
   const home = () => setView('landing')
   const finishLink = () => { cleanUrl(); window.location.assign(window.location.pathname) }
   if (view === 'reset') return <ResetPassword token={RESET_TOKEN} onDone={finishLink} onHome={home} theme={theme} onToggleTheme={toggleTheme} />

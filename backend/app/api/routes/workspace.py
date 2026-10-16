@@ -23,7 +23,7 @@ from app.services.auth import get_current_user, rate_limit_auth
 from app.services.blockradar import Creds, CredentialError, verify_credentials
 from app.services.data_loader import sync_now, drop_state, get_status
 from app.services.sync import purge_org_data
-from app.services import email as mailer, plans
+from app.services import email as mailer, plans, audit
 from app.services.assistant import used_this_month
 from app.models.alerts import AlertChannel
 from app.core.config import get_settings
@@ -87,6 +87,7 @@ async def connect(req: ConnectRequest, user: User = Depends(require_admin), db: 
         purge_org_data(user.org_id)            # a different wallet: never mix its history with the old one
     save_connection(db, user.org_id, creds)
     drop_state(user.org_id)                    # forget any previous wallet's data
+    audit.record(db, user.org_id, user, "connection.saved", f"Connected wallet {mask_wallet_id(creds.wallet_id)}" + (" (replacing the previous wallet)" if previous else ""))
     await sync_now(user.org_id, creds, "connect", force=True)     # quick answer; big wallets keep syncing in the background
     return {**_summary(db, user), "status": get_status(user.org_id)}
 
@@ -94,6 +95,7 @@ async def connect(req: ConnectRequest, user: User = Depends(require_admin), db: 
 @router.delete("/connection")
 def disconnect(user: User = Depends(require_admin), db: Session = Depends(get_db)):
     delete_connection(db, user.org_id)
+    audit.record(db, user.org_id, user, "connection.removed", "Disconnected Blockradar and deleted its stored data")
     purge_org_data(user.org_id)                # disconnecting deletes everything stored from that wallet
     drop_state(user.org_id)
     return _summary(db, user)
@@ -136,8 +138,10 @@ def change_role(member_id: str, req: RoleRequest, user: User = Depends(require_a
         raise HTTPException(status_code=404, detail="Member not found.")
     if target.role == "admin" and req.role != "admin" and _admin_count(db, user.org_id) <= 1:
         raise HTTPException(status_code=400, detail="A workspace needs at least one admin.")
+    old = target.role
     target.role = req.role
     db.commit()
+    audit.record(db, user.org_id, user, "member.role_changed", f"{target.email}: {old} to {req.role}")
     return {"id": target.id, "role": target.role}
 
 
@@ -150,8 +154,10 @@ def remove_member(member_id: str, user: User = Depends(require_admin), db: Sessi
         raise HTTPException(status_code=404, detail="Member not found.")
     if target.role == "admin" and _admin_count(db, user.org_id) <= 1:
         raise HTTPException(status_code=400, detail="A workspace needs at least one admin.")
+    removed_email = target.email
     db.delete(target)
     db.commit()
+    audit.record(db, user.org_id, user, "member.removed", f"Removed {removed_email}")
     return {"removed": True}
 
 
@@ -176,6 +182,7 @@ def new_invite(req: InviteRequest, background: BackgroundTasks, user: User = Dep
     if req.email and db.query(User).filter(User.email == req.email.strip().lower()).first():
         raise HTTPException(status_code=400, detail="That email already has an ERNIE account.")
     invite, token = create_invite(db, user.org_id, user.id, req.email, req.role)
+    audit.record(db, user.org_id, user, "invite.created", f"Invited {invite.email or 'anyone with the link'} as {invite.role}")
     emailed = False
     if req.send_email and invite.email and mailer.email_enabled():
         org = db.query(Organization).filter(Organization.id == user.org_id).first()
@@ -195,4 +202,5 @@ def revoke_invite(invite_id: str, user: User = Depends(require_admin), db: Sessi
         raise HTTPException(status_code=404, detail="Invitation not found.")
     inv.revoked_at = datetime.utcnow()
     db.commit()
+    audit.record(db, user.org_id, user, "invite.revoked", f"Revoked the invitation for {inv.email or 'a link invite'}")
     return {"revoked": True}

@@ -242,6 +242,9 @@ export default function Landing({ theme, onToggleTheme, onLogin, onSignup }) {
             <a onClick={go('features')}>Features</a>
             <a onClick={go('security')}>Security</a>
             <a onClick={go('pricing')}>Pricing</a>
+            <a href="#/terms">Terms</a>
+            <a href="#/privacy">Privacy</a>
+            <a href="#/status">Status</a>
             <a onClick={onLogin}>Sign in</a>
           </nav>
         </div>

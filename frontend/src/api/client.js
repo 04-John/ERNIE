@@ -99,3 +99,21 @@ export const fetchPlans        = () => api.get('/billing/plans').then(r => r.dat
 export const fetchBilling      = () => api.get('/billing').then(r => r.data)
 export const startCheckout     = plan => api.post('/billing/checkout', { plan }).then(r => r.data)
 export const openBillingPortal = () => api.post('/billing/portal').then(r => r.data)
+
+// ── Account, audit, data
+export const fetchAudit      = () => api.get('/workspace/audit').then(r => r.data.data)
+export const deleteWorkspace = body => api.delete('/workspace', { data: body }).then(r => r.data)
+export const deleteAccount   = body => api.delete('/account', { data: body }).then(r => r.data)
+export const downloadExport  = async () => {
+  const r = await api.get('/workspace/export', { responseType: 'blob' })
+  const url = URL.createObjectURL(r.data)
+  const a = Object.assign(document.createElement('a'), { href: url, download: 'ernie-export.json' })
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+// ── Platform admin and public status
+export const fetchAdminOverview   = () => api.get('/admin/overview').then(r => r.data)
+export const fetchAdminWorkspaces = q => api.get('/admin/workspaces', { params: { q } }).then(r => r.data.data)
+export const setWorkspacePlan     = (id, plan) => api.patch(`/admin/workspaces/${id}/plan`, { plan }).then(r => r.data)
+export const fetchPublicStatus    = () => api.get('/status').then(r => r.data)

@@ -7,6 +7,9 @@ from app.api.routes import alerts as alert_routes
 from app.api.routes import intelligence as intel_routes
 from app.api.routes import assistant as assistant_routes
 from app.api.routes import billing as billing_routes
+from app.api.routes import account as account_routes
+from app.api.routes import admin as admin_routes
+from app.api.routes import status as status_routes
 from app.services.auth import get_current_user
 import asyncio
 
@@ -72,11 +75,15 @@ app.include_router(analytics.router, prefix="/analytics", tags=["Analytics"], de
 app.include_router(churn.router,     prefix="/churn",     tags=["Churn"],     dependencies=_protected)
 app.include_router(wallets.router,   prefix="/wallets",   tags=["Wallets"],   dependencies=_protected)
 app.include_router(workspace.router, prefix="/workspace", tags=["Workspace"], dependencies=_protected)
+app.include_router(account_routes.router, prefix="/workspace", tags=["Account"], dependencies=_protected)
+app.include_router(account_routes.account_router, prefix="/account", tags=["Account"], dependencies=_protected)
 app.include_router(alert_routes.router, prefix="/workspace/alerts", tags=["Alerts"], dependencies=_protected)
 app.include_router(intel_routes.router, prefix="/intelligence", tags=["Intelligence"], dependencies=_protected)
 app.include_router(assistant_routes.router, prefix="/assistant", tags=["Assistant"], dependencies=_protected)
 # /plans is public and /webhook is signature-verified; the other billing routes check the user themselves
 app.include_router(billing_routes.router, prefix="/billing", tags=["Billing"])
+app.include_router(admin_routes.router, prefix="/admin", tags=["Admin"], dependencies=_protected)
+app.include_router(status_routes.router, tags=["Health"])
 
 
 @app.get("/", tags=["Health"])

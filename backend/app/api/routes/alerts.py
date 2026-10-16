@@ -23,7 +23,7 @@ from app.core.database import get_db
 from app.models.alerts import AlertChannel
 from app.models.organization import Organization
 from app.models.user import User
-from app.services import alerts, plans
+from app.services import alerts, plans, audit
 from app.services.auth import get_current_user, rate_limit_auth
 
 router = APIRouter()
@@ -76,6 +76,7 @@ async def add_channel(req: ChannelRequest, user: User = Depends(require_admin), 
     db.add(channel)
     db.commit()
     db.refresh(channel)
+    audit.record(db, user.org_id, user, "alert_channel.added", f"Added {req.kind} channel {channel.label or ''}".strip())
     out = _view(channel)
     if secret:
         out["secret"] = secret           # shown once: the receiver needs it to verify the signature
@@ -87,13 +88,17 @@ def toggle_channel(channel_id: str, req: ToggleRequest, user: User = Depends(req
     c = _own(db, user, channel_id)
     c.enabled = req.enabled
     db.commit()
+    audit.record(db, user.org_id, user, "alert_channel.toggled", f"{'Enabled' if req.enabled else 'Paused'} {c.kind} channel {c.label or ''}".strip())
     return _view(c)
 
 
 @router.delete("/channels/{channel_id}")
 def remove_channel(channel_id: str, user: User = Depends(require_admin), db: Session = Depends(get_db)):
-    db.delete(_own(db, user, channel_id))
+    c = _own(db, user, channel_id)
+    desc = f"Removed {c.kind} channel {c.label or ''}".strip()
+    db.delete(c)
     db.commit()
+    audit.record(db, user.org_id, user, "alert_channel.removed", desc)
     return {"removed": True}
 
 

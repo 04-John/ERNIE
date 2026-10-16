@@ -102,6 +102,14 @@ Free, Pro and Business plans are defined in one file, `backend/app/services/plan
 
 Payments use Stripe Checkout and the Customer Portal, so card details never touch ERNIE. A workspace's plan changes **only** when a Stripe webhook with a valid signature arrives. To switch billing on: create two recurring monthly Prices, set `STRIPE_SECRET_KEY`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_BUSINESS`, add a webhook endpoint at `<API URL>/billing/webhook` for `checkout.session.completed` and `customer.subscription.created|updated|deleted`, and set `STRIPE_WEBHOOK_SECRET`. Without keys, ERNIE runs normally and everyone is on Free.
 
+### Running the business
+
+- **Admin console** (`#/admin`): every workspace with plan, members, sync health and AI usage, plus a plan override for comped or enterprise accounts. Set `PLATFORM_ADMIN_EMAILS`; the account must be verified (Google sign-in counts). Everyone else gets a 404.
+- **Status page** (`#/status`, API `GET /status`): public health of the API, database and scheduled refresh. Point an uptime monitor at it.
+- **Activity log**: admins see who changed the connection, team, alerts, AI setting and plan. Secrets are never recorded.
+- **Data export and deletion**: Settings has "Download workspace data" and deletion of an account or whole workspace (type to confirm, password required). Deleting cancels the Stripe subscription first, and refuses if it cannot.
+- **Legal**: `#/terms` and `#/privacy` are drafts that match what the product does. Have a lawyer review them before you take payments, and set `VITE_SUPPORT_EMAIL` (frontend build variable) so they show a contact address.
+
 ### Ask ERNIE (AI assistant)
 
 An analyst chat and a "Draft outreach" button on each fintech page, grounded in the workspace's own scores and findings.

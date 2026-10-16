@@ -8,6 +8,7 @@ import {
   fetchChannels, addChannel, toggleChannel, removeChannel, testChannel, fetchAlertEvents, fetchFintech,
   fetchInsights, dismissInsight, fetchForecast, fetchCohorts, fetchHealth,
   fetchAssistantStatus, setAssistantEnabled, fetchPlans, fetchBilling,
+  fetchAudit, fetchAdminOverview, fetchAdminWorkspaces, setWorkspacePlan, fetchPublicStatus,
 } from '../api/client'
 
 export const useSummary       = () => useQuery({ queryKey: ['summary'],        queryFn: fetchSummary })
@@ -99,3 +100,13 @@ export const useAssistantEnable = () => {
 // ── Billing
 export const usePlans   = () => useQuery({ queryKey: ['plans'], queryFn: fetchPlans, staleTime: 5 * 60_000, retry: false })
 export const useBilling = () => useQuery({ queryKey: ['billing'], queryFn: fetchBilling, retry: false })
+
+// ── Audit, admin console, public status
+export const useAudit = () => useQuery({ queryKey: ['audit'], queryFn: fetchAudit })
+export const useAdminOverview = () => useQuery({ queryKey: ['admin-overview'], queryFn: fetchAdminOverview, retry: false })
+export const useAdminWorkspaces = q => useQuery({ queryKey: ['admin-workspaces', q], queryFn: () => fetchAdminWorkspaces(q), retry: false, placeholderData: prev => prev })
+export const usePublicStatus = () => useQuery({ queryKey: ['public-status'], queryFn: fetchPublicStatus, refetchInterval: 30_000, retry: false })
+export const useSetWorkspacePlan = () => {
+  const qc = useQueryClient()
+  return useMutation({ mutationFn: ({ id, plan }) => setWorkspacePlan(id, plan), onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-workspaces'] }); qc.invalidateQueries({ queryKey: ['admin-overview'] }) } })
+}

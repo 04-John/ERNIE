@@ -91,6 +91,8 @@ export default function Signup({ onSignup, onLogin, onHome, theme, onToggleTheme
 
           {error && <Alert tone="danger">{error}</Alert>}
 
+          <p className="hint" style={{ textAlign: 'center' }}>By creating an account you agree to the <a href="#/terms" target="_blank" rel="noreferrer" style={{ color: 'var(--accent-text)' }}>Terms</a> and <a href="#/privacy" target="_blank" rel="noreferrer" style={{ color: 'var(--accent-text)' }}>Privacy Policy</a>.</p>
+
           <button type="submit" className="btn btn-primary btn-block" style={{ height: 46 }} disabled={loading}>
             {loading ? <><Loader2 size={16} className="spin" /> Creating account…</> : <>Create account <ArrowRight size={16} /></>}
           </button>

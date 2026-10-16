@@ -9,6 +9,7 @@ import {
 import { BASE_URL } from '../api/client'
 import { fmtNum, timeAgo, copyText } from '../lib/format'
 import PlanCard from '../components/PlanCard'
+import { AuditCard, DataCard } from '../components/AccountCards'
 
 const SOURCE_LABEL = {
   real: { tone: 'success', text: 'Live Blockradar data' },
@@ -415,6 +416,10 @@ export default function SettingsPage({ user, theme, setTheme, onLogout }) {
       <TeamCard emailEnabled={user?.email_enabled} />
 
       <AlertsCard />
+
+      {ws?.role === 'admin' && <AuditCard />}
+
+      <DataCard user={user} onLogout={onLogout} />
 
       <Card title="Data status" action={
         <button className="btn btn-sm" onClick={() => refresh.mutate()} disabled={busy || s?.data_source === 'simulated'}

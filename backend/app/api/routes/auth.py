@@ -262,6 +262,8 @@ def get_me(user: User = Depends(get_current_user), db: Session = Depends(get_db)
     return {
         "is_verified":   user.is_verified,
         "email_enabled": mailer.email_enabled(),
+        "has_password":  bool(user.hashed_password),      # Google-only accounts have none
+        "platform_admin": user.is_verified and user.email.lower() in {e.strip().lower() for e in get_settings().platform_admin_emails.split(",") if e.strip()},
         "workspace":  org.name if org else None,
         "role":       user.role,
         "id":         user.id,

@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models.organization import Organization
-from app.services import plans
+from app.services import plans, audit
 
 settings = get_settings()
 
@@ -103,6 +103,7 @@ def apply_event(db: Session, event) -> str:
         if plan in plans.PLANS and obj.get("payment_status") in ("paid", "no_payment_required"):
             org.plan, org.subscription_status = plan, "active"
         db.commit()
+        audit.record(db, org.id, "stripe", "plan.changed", f"Subscribed to {org.plan}")
         return f"checkout:{org.plan}"
 
     if kind in ("customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted"):
@@ -116,6 +117,7 @@ def apply_event(db: Session, event) -> str:
         price = (((obj.get("items") or {}).get("data") or [{}])[0].get("price") or {}).get("id")
         org.stripe_subscription_id = obj.get("id")
         org.subscription_status = status
+        before = org.plan
         paid_plan = plan_for_price(price) or (obj.get("metadata") or {}).get("plan")
         if status in LIVE_STATUSES and paid_plan in plans.PLANS:
             org.plan = paid_plan
@@ -124,6 +126,8 @@ def apply_event(db: Session, event) -> str:
             if status == "canceled":
                 org.stripe_subscription_id = None
         db.commit()
+        if org.plan != before:
+            audit.record(db, org.id, "stripe", "plan.changed", f"{before} to {org.plan} ({status})")
         return f"subscription:{status}:{org.plan}"
 
     return "ignored"

@@ -30,6 +30,8 @@ class Settings(BaseSettings):
 
     # Optional: seed this user's workspace with the BLOCKRADAR_* env credentials (self-hosting convenience)
     bootstrap_admin_email: str = ""
+    # Comma-separated emails of the people who run the platform (admin console). Must also be verified.
+    platform_admin_emails: str = ""
 
     # Warm the shared demo dataset in the background at startup
     warm_demo: bool = True
