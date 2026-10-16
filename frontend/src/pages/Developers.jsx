@@ -19,6 +19,13 @@ const GROUPS = [
     { m: 'PUT',    p: '/workspace/connection', d: 'Connect Blockradar (admin only)',    params: 'api_key, wallet_id', ret: 'workspace summary + status. The key is verified, then stored encrypted and never returned' },
     { m: 'DELETE', p: '/workspace/connection', d: 'Disconnect and clear cached data',   ret: 'workspace summary' },
   ]},
+  { name: 'Intelligence', endpoints: [
+    { m: 'GET',  p: '/intelligence/insights',         d: 'Prioritised findings',           ret: 'key, severity, title, detail, action, fintech_ids, evidence' },
+    { m: 'POST', p: '/intelligence/insights/dismiss', d: 'Hide a finding until it changes', params: 'key', ret: 'dismissed' },
+    { m: 'GET',  p: '/intelligence/forecast',         d: '30-day volume forecast + anomalies', ret: 'forecast{history, forecast[{day, value, low, high}], next30, last30, change}, anomalies[]' },
+    { m: 'GET',  p: '/intelligence/cohorts',          d: 'Wallet cohorts by creation month', ret: 'month, wallets, activated_pct, active_pct' },
+    { m: 'GET',  p: '/intelligence/health',           d: 'Retention health score',         ret: 'score (0-100), grade, components[]' },
+  ]},
   { name: 'Alerts', endpoints: [
     { m: 'GET',    p: '/workspace/alerts/events',   d: 'Recent alert history (any member)',  ret: 'kind, fintech_name, title, detail, created_at' },
     { m: 'GET',    p: '/workspace/alerts/channels', d: 'List alert channels (admin)',         ret: 'id, kind, label, hint, enabled, last_sent_at, last_error' },

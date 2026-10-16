@@ -6,6 +6,7 @@ import { Card, Skeleton, EmptyState, ChartTooltip } from './ui'
 import { fmtNum, fmtUsd } from '../lib/format'
 
 const METRICS = [
+  { key: 'health_score',   label: 'Health score',  fmt: v => `${Math.round(v)}`, axis: v => v, color: 'var(--success)' },
   { key: 'dormancy_rate',   label: 'Dormancy rate',  fmt: v => `${(v * 100).toFixed(1)}%`, axis: v => `${Math.round(v * 100)}%`, color: 'var(--warn)' },
   { key: 'active_wallets',  label: 'Active wallets', fmt: fmtNum,                          axis: fmtNum,                          color: 'var(--emerald)' },
   { key: 'high_risk',       label: 'High-risk fintechs', fmt: fmtNum,                      axis: v => v,                          color: 'var(--danger)' },

@@ -1,16 +1,20 @@
 import { DollarSign, Wallet, PauseCircle, AlertTriangle } from 'lucide-react'
-import { useSummary, useStatus } from '../hooks/useAnalytics'
+import { useSummary, useStatus, useInsights } from '../hooks/useAnalytics'
 import { PageHeader, StatCard, Alert } from '../components/ui'
 import VolumeChart from '../components/VolumeChart'
 import ChurnDonut from '../components/ChurnDonut'
 import TypeBars from '../components/TypeBars'
 import RegionalCards from '../components/RegionalCards'
 import TopRiskList from '../components/TopRiskList'
+import HealthCard from '../components/HealthCard'
+import { InsightList } from '../components/Insights'
 import { fmtNum, fmtUsd, fmtPct } from '../lib/format'
 
 export default function Overview({ user }) {
   const { data: s = {}, isLoading } = useSummary()
   const { data: status } = useStatus()
+  const { data: ins } = useInsights()
+  const top = (ins?.data || []).filter(i => i.kind !== 'getting_started' || true).slice(0, 3)
   const first = (user?.name || '').split(' ')[0]
 
   const noActivity = status?.data_source === 'real' && s.total_transactions === 0
@@ -67,6 +71,18 @@ export default function Overview({ user }) {
         <StatCard loading={isLoading} label="High churn risk" value={fmtNum(s.high_risk_fintechs)}
           sub="Fintechs needing attention" tone="danger" icon={AlertTriangle} />
       </div>
+
+      {top.length > 0 && (
+        <section aria-label="Top insights" style={{ display: 'grid', gap: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <h2 style={{ fontSize: 16, fontWeight: 700 }}>What needs your attention</h2>
+            <a href="#/insights" className="link" style={{ fontSize: 13 }}>See all {ins.data.length} →</a>
+          </div>
+          <InsightList insights={top} compact />
+        </section>
+      )}
+
+      <HealthCard />
 
       <VolumeChart />
 

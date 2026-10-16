@@ -6,6 +6,7 @@ import {
   fetchWorkspace, connectBlockradar, disconnectBlockradar,
   fetchMembers, fetchInvites, createInvite, revokeInvite, changeRole, removeMember, fetchHistory,
   fetchChannels, addChannel, toggleChannel, removeChannel, testChannel, fetchAlertEvents, fetchFintech,
+  fetchInsights, dismissInsight, fetchForecast, fetchCohorts, fetchHealth,
 } from '../api/client'
 
 export const useSummary       = () => useQuery({ queryKey: ['summary'],        queryFn: fetchSummary })
@@ -76,3 +77,13 @@ export const useRemoveChannel = channelMutation(removeChannel)
 export const useTestChannel   = channelMutation(testChannel)
 
 export const useFintech = id => useQuery({ queryKey: ['fintech', id], queryFn: () => fetchFintech(id), enabled: Boolean(id), retry: false })
+
+// ── Intelligence
+export const useInsights = () => useQuery({ queryKey: ['insights'], queryFn: fetchInsights })
+export const useForecast = () => useQuery({ queryKey: ['forecast'], queryFn: fetchForecast })
+export const useCohorts  = () => useQuery({ queryKey: ['cohorts'],  queryFn: fetchCohorts })
+export const useHealth   = () => useQuery({ queryKey: ['health'],   queryFn: fetchHealth })
+export const useDismissInsight = () => {
+  const qc = useQueryClient()
+  return useMutation({ mutationFn: dismissInsight, onSuccess: () => qc.invalidateQueries({ queryKey: ['insights'] }) })
+}

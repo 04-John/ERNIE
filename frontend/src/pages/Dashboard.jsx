@@ -1,17 +1,18 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { LayoutDashboard, BarChart3, Wallet, Code2, Settings, LogOut, Menu, Sun, Moon, ChevronDown } from 'lucide-react'
+import { LayoutDashboard, BarChart3, Wallet, Code2, Settings, LogOut, Menu, Sun, Moon, ChevronDown, Lightbulb } from 'lucide-react'
 import Logo from '../components/Logo'
 import DataStatus from '../components/DataStatus'
 import Notifications from '../components/Notifications'
 import { Skeleton, Alert } from '../components/ui'
 import { resendVerification } from '../api/client'
 import { initials } from '../lib/format'
-import { useStatus } from '../hooks/useAnalytics'
+import { useStatus, useInsights } from '../hooks/useAnalytics'
 
 // Pages load on demand so the first paint stays small (charts are the heavy part)
 const Overview   = lazy(() => import('./Overview'))
 const Analytics  = lazy(() => import('./Analytics'))
+const Insights   = lazy(() => import('./Insights'))
 const Wallets    = lazy(() => import('./Wallets'))
 const Developers = lazy(() => import('./Developers'))
 const FintechDetail = lazy(() => import('./FintechDetail'))
@@ -19,6 +20,7 @@ const SettingsPage = lazy(() => import('./SettingsPage'))
 
 const NAV = [
   { id: 'overview',   label: 'Overview',   icon: LayoutDashboard },
+  { id: 'insights',   label: 'Insights',   icon: Lightbulb },
   { id: 'analytics',  label: 'Analytics',  icon: BarChart3 },
   { id: 'wallets',    label: 'Wallets',    icon: Wallet },
   { id: 'developers', label: 'Developers', icon: Code2 },
@@ -64,11 +66,12 @@ function VerifyBanner({ user }) {
   )
 }
 
-function NavLink({ item, active, onNavigate }) {
+function NavLink({ item, active, onNavigate, badge }) {
   return (
     <a href={`#/${item.id}`} className="nav-item" aria-current={active ? 'page' : undefined} onClick={onNavigate}>
       <item.icon size={18} strokeWidth={active ? 2.2 : 1.8} />
       {item.label}
+      {badge > 0 && <span className="nav-badge" aria-label={`${badge} need attention`}>{badge}</span>}
     </a>
   )
 }
@@ -121,6 +124,8 @@ function useSyncWatcher() {
 export default function Dashboard({ theme, setTheme, user, onLogout }) {
   useSyncWatcher()
   const { id: route, param } = useRoute()
+  const { data: insightData } = useInsights()
+  const attention = (insightData?.data || []).filter(i => i.severity === 'critical' || i.severity === 'warning').length
   const [drawer, setDrawer] = useState(false)
   const navId = route === 'fintech' ? 'analytics' : route          // a fintech page lives under Analytics
   const current = ALL.find(n => n.id === navId)
@@ -133,7 +138,7 @@ export default function Dashboard({ theme, setTheme, user, onLogout }) {
     return () => document.removeEventListener('keydown', onKey)
   }, [drawer])
 
-  const Page = { overview: Overview, analytics: Analytics, wallets: Wallets, developers: Developers, settings: SettingsPage, fintech: FintechDetail }[route]
+  const Page = { overview: Overview, insights: Insights, analytics: Analytics, wallets: Wallets, developers: Developers, settings: SettingsPage, fintech: FintechDetail }[route]
 
   return (
     <div className="shell">
@@ -143,7 +148,7 @@ export default function Dashboard({ theme, setTheme, user, onLogout }) {
 
         <div className="sidebar-section">Workspace</div>
         <nav className="nav">
-          {NAV.map(item => <NavLink key={item.id} item={item} active={navId === item.id} onNavigate={closeDrawer} />)}
+          {NAV.map(item => <NavLink key={item.id} item={item} active={navId === item.id} onNavigate={closeDrawer} badge={item.id === 'insights' ? attention : 0} />)}
         </nav>
 
         <div className="sidebar-foot">

@@ -76,6 +76,13 @@ export const removeChannel    = id => api.delete(`/workspace/alerts/channels/${i
 export const testChannel      = id => api.post(`/workspace/alerts/channels/${id}/test`).then(r => r.data)
 export const fetchAlertEvents = () => api.get('/workspace/alerts/events').then(r => r.data.data)
 
+// ── Intelligence
+export const fetchInsights   = () => api.get('/intelligence/insights').then(r => r.data)
+export const dismissInsight  = key => api.post('/intelligence/insights/dismiss', { key }).then(r => r.data)
+export const fetchForecast   = () => api.get('/intelligence/forecast').then(r => r.data)
+export const fetchCohorts    = () => api.get('/intelligence/cohorts').then(r => r.data.data)
+export const fetchHealth     = () => api.get('/intelligence/health').then(r => r.data)
+
 // ── Wallets
 export const fetchDormancy      = () => api.get('/wallets/dormancy').then(r => r.data.data)
 export const fetchWalletList    = (params = {}) => api.get('/wallets/activity', { params }).then(r => r.data)

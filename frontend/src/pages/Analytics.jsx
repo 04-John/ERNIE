@@ -6,6 +6,8 @@ import ChurnTable from '../components/ChurnTable'
 import TopRiskList from '../components/TopRiskList'
 import RegionalCards from '../components/RegionalCards'
 import TrendsCard from '../components/TrendsCard'
+import ForecastCard from '../components/ForecastCard'
+import CohortsCard from '../components/CohortsCard'
 import { fmtNum } from '../lib/format'
 
 export default function Analytics() {
@@ -32,6 +34,8 @@ export default function Analytics() {
 
       <TrendsCard />
 
+      <ForecastCard />
+
       <div className="grid-2">
         <Card title="Average volume by fintech type" subtitle="USD (thousands)" chip="Per fintech">
           {byType.length === 0 ? (
@@ -52,6 +56,7 @@ export default function Analytics() {
       </div>
 
       <RegionalCards />
+      <CohortsCard />
       <ChurnTable />
     </div>
   )

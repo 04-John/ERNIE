@@ -390,6 +390,9 @@ code, pre, .mono { font-family: var(--font-mono); }
 .logo-word { font-weight: 800; letter-spacing: -0.04em; line-height: 1; }
 .logo-tag { font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
 
+.nav-badge { margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; display: grid; place-items: center;
+  font-size: 11px; font-weight: 700; background: var(--danger-soft); color: var(--danger); }
+
 /* ── Links inside tables/cards ── */
 .row-link { color: inherit; }
 .row-link:hover { color: var(--accent-text); text-decoration: underline; }
