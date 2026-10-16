@@ -95,6 +95,16 @@ ERNIE is multi-tenant. Every signup creates its own **workspace** and becomes it
 - An admin connects a wallet under **Settings → Blockradar connection** (wallet ID + API key). The key is verified against Blockradar, then stored **encrypted** (Fernet, derived from `ENCRYPTION_KEY`) and is never returned by any endpoint or written to logs.
 - A real workspace never falls back to demo data: if a sync fails it keeps its last good data and shows the error.
 - `DATA_MODE=simulated` forces demo data for everyone (local development); `DATA_MODE=real` enables per-workspace connections.
+
+### Ask ERNIE (AI assistant)
+
+An analyst chat and a "Draft outreach" button on each fintech page, grounded in the workspace's own scores and findings.
+
+- **Opt-in per workspace**: an admin turns it on after reading what is sent. Off by default; nothing leaves the server until then.
+- **Minimal data**: aggregated fintech-level facts only. Never API keys, wallet addresses, transaction hashes, emails or team details. Fintech names are treated as data, not instructions.
+- **Config**: set `ANTHROPIC_API_KEY` (the Anthropic account needs credit). Optional: `ASSISTANT_MODEL`, `ASSISTANT_FALLBACKS`, `AI_MONTHLY_LIMIT` (messages per workspace per month, default in `config.py`).
+- If provider credit runs out, customers see a calm "temporarily unavailable" and the server log says `OPERATOR ACTION NEEDED`.
+
 - Self-hosting shortcut: set `BOOTSTRAP_ADMIN_EMAIL` plus `BLOCKRADAR_API_KEY` / `BLOCKRADAR_WALLET_ID` to auto-connect that one account.
 - Upgrading an existing database is automatic: on startup users get a workspace (they become admin).
 

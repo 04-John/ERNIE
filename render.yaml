@@ -29,6 +29,9 @@ services:
       # (stored keys would stop decrypting). If unset, SECRET_KEY is used instead.
       - key: ENCRYPTION_KEY
         generateValue: true
+      # Optional: enables the Ask ERNIE assistant (opt-in per workspace). Needs credit on the Anthropic account.
+      - key: ANTHROPIC_API_KEY
+        sync: false
       # Optional: this account's workspace is auto-connected using the two BLOCKRADAR_* values below.
       # Everyone else connects their own wallet in Settings.
       - key: BOOTSTRAP_ADMIN_EMAIL

@@ -1,5 +1,6 @@
 import { ArrowLeft, Clock, DollarSign, Repeat, Wallet as WalletIcon, SearchX, TrendingUp } from 'lucide-react'
 import { ComposedChart, Bar, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts'
+import DraftOutreach from '../components/DraftOutreach'
 import { useFintech } from '../hooks/useAnalytics'
 import { PageHeader, StatCard, Card, Badge, Skeleton, EmptyState, ChartTooltip, ProgressBar } from '../components/ui'
 import { fmtNum, fmtUsd, fmtPct, timeAgo, RISK_TONE } from '../lib/format'
@@ -77,6 +78,7 @@ export default function FintechDetail({ param }) {
         </div>}>
         {f.region} · {f.type || 'Unclassified'}{f.country && f.country !== 'Unknown' ? ` · ${f.country}` : ''}
       </PageHeader>
+      {f.churn_risk !== 'Unknown' && <div><DraftOutreach fintechId={f.fintech_id} name={f.fintech_name} /></div>}
 
       <div className="grid-kpi">
         <StatCard label="Last transaction" value={lastTx} sub="Successful transactions only" tone={f.days_since_last_tx > 60 ? 'warn' : 'accent'} icon={Clock} />

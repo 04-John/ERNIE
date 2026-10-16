@@ -7,6 +7,7 @@ import {
   fetchMembers, fetchInvites, createInvite, revokeInvite, changeRole, removeMember, fetchHistory,
   fetchChannels, addChannel, toggleChannel, removeChannel, testChannel, fetchAlertEvents, fetchFintech,
   fetchInsights, dismissInsight, fetchForecast, fetchCohorts, fetchHealth,
+  fetchAssistantStatus, setAssistantEnabled,
 } from '../api/client'
 
 export const useSummary       = () => useQuery({ queryKey: ['summary'],        queryFn: fetchSummary })
@@ -86,4 +87,11 @@ export const useHealth   = () => useQuery({ queryKey: ['health'],   queryFn: fet
 export const useDismissInsight = () => {
   const qc = useQueryClient()
   return useMutation({ mutationFn: dismissInsight, onSuccess: () => qc.invalidateQueries({ queryKey: ['insights'] }) })
+}
+
+// ── Assistant
+export const useAssistantStatus = () => useQuery({ queryKey: ['assistant-status'], queryFn: fetchAssistantStatus, retry: false })
+export const useAssistantEnable = () => {
+  const qc = useQueryClient()
+  return useMutation({ mutationFn: setAssistantEnabled, onSuccess: () => qc.invalidateQueries({ queryKey: ['assistant-status'] }) })
 }

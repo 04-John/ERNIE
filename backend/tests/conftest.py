@@ -15,6 +15,7 @@ os.environ.update(
     BOOTSTRAP_ADMIN_EMAIL="",
     BLOCKRADAR_API_KEY="",
     BLOCKRADAR_WALLET_ID="",
+    ANTHROPIC_API_KEY="",        # tests must never reach the real API, even if the developer's shell has a key
 )
 
 import pytest

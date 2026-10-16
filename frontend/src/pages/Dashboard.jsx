@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { LayoutDashboard, BarChart3, Wallet, Code2, Settings, LogOut, Menu, Sun, Moon, ChevronDown, Lightbulb } from 'lucide-react'
+import { LayoutDashboard, BarChart3, Wallet, Code2, Settings, LogOut, Menu, Sun, Moon, ChevronDown, Lightbulb, Sparkles } from 'lucide-react'
 import Logo from '../components/Logo'
 import DataStatus from '../components/DataStatus'
 import Notifications from '../components/Notifications'
@@ -13,6 +13,7 @@ import { useStatus, useInsights } from '../hooks/useAnalytics'
 const Overview   = lazy(() => import('./Overview'))
 const Analytics  = lazy(() => import('./Analytics'))
 const Insights   = lazy(() => import('./Insights'))
+const Assistant  = lazy(() => import('./Assistant'))
 const Wallets    = lazy(() => import('./Wallets'))
 const Developers = lazy(() => import('./Developers'))
 const FintechDetail = lazy(() => import('./FintechDetail'))
@@ -21,6 +22,7 @@ const SettingsPage = lazy(() => import('./SettingsPage'))
 const NAV = [
   { id: 'overview',   label: 'Overview',   icon: LayoutDashboard },
   { id: 'insights',   label: 'Insights',   icon: Lightbulb },
+  { id: 'assistant',  label: 'Ask ERNIE',  icon: Sparkles },
   { id: 'analytics',  label: 'Analytics',  icon: BarChart3 },
   { id: 'wallets',    label: 'Wallets',    icon: Wallet },
   { id: 'developers', label: 'Developers', icon: Code2 },
@@ -138,7 +140,7 @@ export default function Dashboard({ theme, setTheme, user, onLogout }) {
     return () => document.removeEventListener('keydown', onKey)
   }, [drawer])
 
-  const Page = { overview: Overview, insights: Insights, analytics: Analytics, wallets: Wallets, developers: Developers, settings: SettingsPage, fintech: FintechDetail }[route]
+  const Page = { overview: Overview, insights: Insights, assistant: Assistant, analytics: Analytics, wallets: Wallets, developers: Developers, settings: SettingsPage, fintech: FintechDetail }[route]
 
   return (
     <div className="shell">

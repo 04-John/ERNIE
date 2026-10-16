@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey
+from sqlalchemy import Column, String, Text, Boolean, DateTime, ForeignKey
 from sqlalchemy.sql import func
 from app.core.database import Base
 import uuid
@@ -11,6 +11,7 @@ class Organization(Base):
     id         = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     name       = Column(String, nullable=False)
     created_at = Column(DateTime, server_default=func.now())
+    ai_enabled = Column(Boolean, nullable=False, default=False, server_default="0")   # opt-in to the AI assistant
 
 
 class BlockradarConnection(Base):

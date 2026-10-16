@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     # Public URL of the web app; used to build links inside emails
     public_app_url: str = "http://localhost:5173"
 
+    # AI assistant ("Ask ERNIE"). Leave the key empty to disable the feature entirely.
+    anthropic_api_key: str = ""
+    assistant_model: str = "claude-opus-5-5"
+    assistant_fallbacks: bool = True          # server-side refusal fallbacks (retried without if the API rejects them)
+    ai_monthly_limit: int = 100               # assistant messages per workspace per month
+
     # Auth
     google_client_id: str = ""
     # Comma-separated list of allowed browser origins

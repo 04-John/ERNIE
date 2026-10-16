@@ -179,6 +179,12 @@ def run_migrations(db: Session) -> None:
                 conn.execute(text("ALTER TABLE users ADD COLUMN role VARCHAR NOT NULL DEFAULT 'admin'"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_users_org_id ON users (org_id)"))
 
+    if "organizations" in insp.get_table_names():
+        ocols = {c["name"] for c in insp.get_columns("organizations")}
+        if "ai_enabled" not in ocols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE organizations ADD COLUMN ai_enabled BOOLEAN NOT NULL DEFAULT FALSE"))
+
     if "daily_snapshots" in insp.get_table_names():
         scols = {c["name"] for c in insp.get_columns("daily_snapshots")}
         if "health_score" not in scols:

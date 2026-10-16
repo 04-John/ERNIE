@@ -87,3 +87,9 @@ export const fetchHealth     = () => api.get('/intelligence/health').then(r => r
 export const fetchDormancy      = () => api.get('/wallets/dormancy').then(r => r.data.data)
 export const fetchWalletList    = (params = {}) => api.get('/wallets/activity', { params }).then(r => r.data)
 export const fetchActivityTrend = () => api.get('/wallets/activity-trend').then(r => r.data.data)
+
+// ── Assistant
+export const fetchAssistantStatus = () => api.get('/assistant/status').then(r => r.data)
+export const setAssistantEnabled  = enabled => api.put('/assistant/settings', { enabled }).then(r => r.data)
+export const assistantChat        = messages => api.post('/assistant/chat', { messages }).then(r => r.data)
+export const draftOutreach        = (fintech_id, channel) => api.post('/assistant/draft-outreach', { fintech_id, channel }).then(r => r.data)
