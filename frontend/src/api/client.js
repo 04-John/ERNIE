@@ -41,3 +41,8 @@ export const fetchDistribution = () => api.get('/churn/distribution').then(r => 
 
 // ── Wallets
 export const fetchDormancy = () => api.get('/wallets/dormancy').then(r => r.data.data)
+export const fetchActivityTrend = () => api.get('/wallets/activity-trend').then(r => r.data.data)
+
+// ── Pipeline status / manual refresh
+export const fetchStatus = () => api.get('/analytics/status').then(r => r.data)
+export const refreshData = () => api.post('/analytics/refresh').then(r => r.data)

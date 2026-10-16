@@ -112,12 +112,13 @@ class BlockradarClient:
             response.raise_for_status()
             return response.json().get("data", {})
 
-    async def get_address_balance(self, address_id: str) -> dict:
-        """GET /wallets/{walletId}/addresses/{addressId}/balance"""
+    async def get_address_balance(self, address_id: str, asset_id: str) -> dict:
+        """GET /wallets/{walletId}/addresses/{addressId}/balance?assetId=... (assetId is required)"""
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"{self.base_url}/wallets/{self.wallet_id}/addresses/{address_id}/balance",
                 headers=self.headers,
+                params={"assetId": asset_id},
                 timeout=30,
             )
             response.raise_for_status()

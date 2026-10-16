@@ -116,8 +116,10 @@ def build_features(
         .merge(tx_stats[["fintech_id","total_tx","total_volume",
                           "avg_tx_size","days_since_last_tx"]], on="fintech_id", how="left")
         .merge(trend[["fintech_id","volume_trend","vol_recent_3m"]], on="fintech_id", how="left")
-        .fillna(0)
     )
+    # fintechs with no successful transaction: "never transacted", not "transacted just now"
+    features["days_since_last_tx"] = features["days_since_last_tx"].fillna(999)
+    features = features.fillna(0)
 
     return features
 
@@ -174,7 +176,9 @@ def score_churn(features: pd.DataFrame) -> pd.DataFrame:
         bins=[0, 0.33, 0.66, 1.0],
         labels=["Low", "Medium", "High"],
         include_lowest=True,
-    )
+    ).astype(object)
+    # no successful transactions = nothing to score; don't claim "Low"
+    df.loc[df["total_tx"] == 0, "churn_risk"] = "Unknown"
 
     return df.sort_values("churn_probability", ascending=False)
 
@@ -257,6 +261,7 @@ def compute_summary(
     success_tx = [t for t in transactions if t.get("status") == "SUCCESS"] if transactions else []
     total_volume = sum(t.get("amountUsd", 0) for t in success_tx)
     dormant_count = sum(1 for a in addresses if a.get("isDormant", False))
+    never_active = sum(1 for a in addresses if a.get("neverActive", False))
 
     return {
         "total_wallets":       len(addresses),
@@ -264,6 +269,8 @@ def compute_summary(
         "total_transactions":  len(success_tx),
         "total_volume_usd":    round(total_volume, 2),
         "dormancy_rate":       round(dormant_count / max(len(addresses), 1), 4),
+        "dormant_wallets":     dormant_count,
+        "never_active_wallets": never_active,
         "high_risk_fintechs":  int((scored["churn_risk"] == "High").sum())   if not scored.empty else 0,
         "medium_risk_fintechs":int((scored["churn_risk"] == "Medium").sum()) if not scored.empty else 0,
         "low_risk_fintechs":   int((scored["churn_risk"] == "Low").sum())    if not scored.empty else 0,
@@ -334,9 +341,13 @@ def compute_regional_summary(
     if "isDormant" not in addr_df.columns:
         addr_df["isDormant"] = 0
 
+    if "neverActive" not in addr_df.columns:
+        addr_df["neverActive"] = False
+
     wallet_counts = addr_df.groupby("_region").agg(
         total_wallets=("id", "count"),
         dormant_wallets=("isDormant", "sum"),
+        never_active_wallets=("neverActive", "sum"),
     ).reset_index().rename(columns={"_region": "region"})
 
     if scored.empty:
@@ -344,7 +355,9 @@ def compute_regional_summary(
         wallet_counts["avg_churn_prob"] = 0.0
         wallet_counts["total_volume"]   = 0.0
         wallet_counts["dormancy_rate"]  = wallet_counts["dormant_wallets"] / wallet_counts["total_wallets"]
-        wallet_counts["activation_rate"] = 1 - wallet_counts["dormancy_rate"]
+        wallet_counts["activation_rate"] = (
+            wallet_counts["total_wallets"] - wallet_counts["dormant_wallets"] - wallet_counts["never_active_wallets"]
+        ) / wallet_counts["total_wallets"]
         return wallet_counts.to_dict(orient="records")
 
     region_scores = scored.groupby("region").agg(
@@ -355,7 +368,9 @@ def compute_regional_summary(
 
     summary = wallet_counts.merge(region_scores, on="region", how="left").fillna(0)
     summary["dormancy_rate"]   = summary["dormant_wallets"] / summary["total_wallets"]
-    summary["activation_rate"] = 1 - summary["dormancy_rate"]
+    summary["activation_rate"] = (
+        summary["total_wallets"] - summary["dormant_wallets"] - summary["never_active_wallets"]
+    ) / summary["total_wallets"]
 
     return summary.to_dict(orient="records")
 

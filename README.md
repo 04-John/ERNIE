@@ -89,20 +89,21 @@ All endpoints except `/auth/*` and `/health` require a Bearer token. Interactive
 
 ## Data Modes
 
-Set `DATA_MODE` in `backend/.env`:
+Set `DATA_MODE`:
 
 - `simulated` — generates 100k wallets & ~60k transactions for demo
-- `real` — connects to your live Blockradar account via API
+- `real` — pulls your live Blockradar wallet; falls back to simulated data if the API is unreachable (the dashboard says so in a red badge)
 
----
+## How real data is interpreted
 
-## Data & API Connection
+- Each Blockradar **child address = one fintech**, named after the address `name`.
+- Blockradar addresses carry no activity or balance fields, so **activity comes from transactions** (successful deposits/withdrawals; internal `SALVAGE` sweeps are ignored) and **balances come from the per-address balance endpoint**.
+- An address with no transactions is **"never active"** (not dormant); with no data its churn risk is **"Unknown"**. Dormant = last successful transaction more than 60 days ago.
+- Only stablecoins (USDC, USDT, PYUSD, ...) are valued in USD (1:1); other assets are counted but not valued.
+- Region/country/type are **not invented**. Set them by putting JSON in the address `metadata`, e.g. `{"country": "Kenya", "type": "Remittance"}` (`region` is derived from country, or set it directly). Otherwise they show as Unassigned / Unclassified.
+- Data refreshes at startup, every `PIPELINE_SCHEDULE_HOURS` hours, and on demand via **Refresh now** (`POST /analytics/refresh`, max once per 30s). `GET /analytics/status` reports the source, last refresh and any fetch error.
+- Up to 5,000 recent transactions are read per refresh.
 
-> This platform is connected to a **live Blockradar account** via their REST API. Real wallet addresses and account data are fetched directly from Blockradar's infrastructure on startup.
->
-> Current account is on the free plan with 6 active wallet addresses and no transactions yet. As wallets transact, the churn model, dormancy tracker, and volume charts will populate with fully live data automatically.
->
-> To run with simulated data at scale (100k wallets, 150k transactions across 100+ fintechs), set `DATA_MODE=simulated` in your `.env` file.
 ---
 
 ## Why I built this

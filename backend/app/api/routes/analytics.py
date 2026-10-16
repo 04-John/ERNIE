@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from app.core.state import app_state
 import pandas as pd
 
@@ -49,12 +49,16 @@ async def get_type_breakdown():
 
 @router.get("/status")
 async def get_status():
-    """Pipeline status — last refresh time and data mode."""
-    from app.core.config import get_settings
-    settings = get_settings()
-    return {
-        "data_mode":      settings.data_mode,
-        "last_refreshed": app_state.get("last_refreshed", "Not yet"),
-        "total_fintechs": len(app_state.get("churn_scores", [])),
-        "total_wallets":  app_state.get("summary", {}).get("total_wallets", 0),
-    }
+    """Pipeline status: data source, last refresh time, any fetch error."""
+    from app.services.data_loader import get_status as status
+    return status()
+
+
+@router.post("/refresh")
+async def refresh():
+    """Re-fetch from Blockradar and recompute. Rate limited to one run per 30s."""
+    from app.services.data_loader import refresh_state
+    try:
+        return await refresh_state("manual")
+    except RuntimeError:
+        raise HTTPException(status_code=429, detail="Data was refreshed moments ago. Try again in a few seconds.")

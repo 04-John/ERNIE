@@ -1,16 +1,18 @@
-import { useDormancy } from '../hooks/useAnalytics'
+import { useDormancy, useActivityTrend } from '../hooks/useAnalytics'
 import { Card } from '../components/VolumeChart'
 import { Wallet, TrendingDown, Activity, Globe } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
 
 export default function Wallets() {
   const { data, isLoading } = useDormancy()
+  const { data: trendData = [] } = useActivityTrend()
   const overall   = data?.overall   || {}
   const byRegion  = data?.by_region || []
 
   const total    = overall.total_wallets   || 0
   const active   = overall.active_wallets  || 0
   const dormant  = overall.dormant_wallets || 0
+  const neverActive = overall.never_active_wallets || 0
   const dormRate = ((overall.dormancy_rate || 0) * 100).toFixed(1)
   const actRate  = ((overall.activation_rate || 0) * 100).toFixed(1)
 
@@ -20,13 +22,6 @@ export default function Wallets() {
     Active:  +((r.activation_rate || 0) * 100).toFixed(1),
     Dormant: +((r.dormancy_rate   || 0) * 100).toFixed(1),
     Total:   r.total,
-  }))
-
-  // trend simulation (7 days)
-  const trendData = Array.from({ length: 14 }, (_, i) => ({
-    day: `Day ${i+1}`,
-    active: Math.floor(active * (0.85 + Math.random() * 0.15)),
-    dormant: Math.floor(dormant * (0.95 + Math.random() * 0.08)),
   }))
 
   const StatCard = ({ label, value, sub, color, icon: Icon }) => (
@@ -70,7 +65,7 @@ export default function Wallets() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
         <StatCard label="Total Wallets"   value={total.toLocaleString()}   sub="Across all fintechs"       color="var(--blue)"  icon={Wallet} />
         <StatCard label="Active Wallets"  value={active.toLocaleString()}  sub={`${actRate}% activation`}  color="var(--green)" icon={Activity} />
-        <StatCard label="Dormant Wallets" value={dormant.toLocaleString()} sub="Inactive 60+ days"         color="var(--red)"   icon={TrendingDown} />
+        <StatCard label="Dormant Wallets" value={dormant.toLocaleString()} sub={neverActive ? `Inactive 60+ days · ${neverActive.toLocaleString()} never active` : "Inactive 60+ days"} color="var(--red)"   icon={TrendingDown} />
         <StatCard label="Dormancy Rate"   value={`${dormRate}%`}           sub="Platform-wide average"     color="var(--amber)" icon={Globe} />
       </div>
 
@@ -94,6 +89,9 @@ export default function Wallets() {
 
       {/* Activity trend */}
       <Card title="Wallet Activity Trend" chip="14 days">
+        {trendData.every(d => !d.transactions) ? (
+          <div style={{ padding: 40, textAlign: 'center', fontSize: 13, color: 'var(--text-muted)' }}>No transactions in this period yet.</div>
+        ) : (
         <ResponsiveContainer width="100%" height={200}>
           <AreaChart data={trendData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
             <defs>
@@ -103,15 +101,16 @@ export default function Wallets() {
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-            <XAxis dataKey="day" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
+            <XAxis dataKey="day" interval="preserveStartEnd" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => v.toLocaleString()} />
             <Tooltip
               contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
               formatter={v => [v.toLocaleString(), '']}
             />
-            <Area type="monotone" dataKey="active" stroke="#8DFF1C" strokeWidth={2} fill="url(#activeGrad)" dot={false} name="Active" />
+            <Area type="monotone" dataKey="active_wallets" stroke="#8DFF1C" strokeWidth={2} fill="url(#activeGrad)" dot={false} name="Active wallets" />
           </AreaChart>
         </ResponsiveContainer>
+        )}
       </Card>
 
       {/* Region table */}
@@ -133,7 +132,7 @@ export default function Wallets() {
                 >
                   <td style={{ padding: '12px 14px', fontWeight: 600 }}>{r.region}</td>
                   <td style={{ padding: '12px 14px', fontVariantNumeric: 'tabular-nums' }}>{(r.total || 0).toLocaleString()}</td>
-                  <td style={{ padding: '12px 14px', color: 'var(--green)', fontVariantNumeric: 'tabular-nums' }}>{(r.total - r.dormant || 0).toLocaleString()}</td>
+                  <td style={{ padding: '12px 14px', color: 'var(--green)', fontVariantNumeric: 'tabular-nums' }}>{(r.total - r.dormant - (r.never_active || 0) || 0).toLocaleString()}</td>
                   <td style={{ padding: '12px 14px', color: 'var(--red)', fontVariantNumeric: 'tabular-nums' }}>{(r.dormant || 0).toLocaleString()}</td>
                   <td style={{ padding: '12px 14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

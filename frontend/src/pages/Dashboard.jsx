@@ -13,7 +13,7 @@ import RegionalMap from '../components/RegionalMap'
 import WalletActivity from '../components/WalletActivity'
 import ChurnTable from '../components/ChurnTable'
 import { BASE_URL } from '../api/client'
-import { useSummary, useDistribution, useTypeBreakdown } from '../hooks/useAnalytics'
+import { useSummary, useDistribution, useTypeBreakdown, useStatus, useRefresh } from '../hooks/useAnalytics'
 
 // ── Sidebar Nav Item
 function NavItem({ item, active, setActive }) {
@@ -421,14 +421,62 @@ function ComingSoon({ label }) {
   )
 }
 
+// ── Data source badge, last-updated time and manual refresh
+function DataStatus() {
+  const { data: status } = useStatus()
+  const refresh = useRefresh()
+
+  const source = status?.data_source
+  const label = {
+    real: 'Live · Blockradar API',
+    simulated: 'Demo data (simulated)',
+    'simulated-fallback': 'Blockradar unreachable · showing demo data',
+  }[source] || 'Loading…'
+  const isLive = source === 'real'
+  const warn = source === 'simulated-fallback'
+
+  const updated = status?.last_refreshed ? new Date(status.last_refreshed).toLocaleString() : '—'
+  const err = refresh.error?.response?.data?.detail || (refresh.isError ? 'Refresh failed' : null)
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <span style={{
+        fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em',
+        padding: '4px 12px', borderRadius: 20,
+        color: isLive ? '#000' : warn ? 'var(--red)' : 'var(--amber)',
+        background: isLive ? 'var(--green)' : 'transparent',
+        border: isLive ? 'none' : `1px solid ${warn ? 'var(--red)' : 'var(--amber)'}`,
+      }}>{label}</span>
+      <span style={{ fontSize: 10, color: 'var(--text-muted)', padding: '4px 12px', borderRadius: 20, border: '1px solid var(--border)' }}>
+        Updated {updated}{status?.refresh_interval_hours ? ` · auto every ${status.refresh_interval_hours}h` : ''}
+      </span>
+      <button
+        onClick={() => refresh.mutate()}
+        disabled={refresh.isPending || status?.refreshing}
+        style={{
+          fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em',
+          padding: '4px 12px', borderRadius: 20, cursor: refresh.isPending ? 'wait' : 'pointer',
+          background: 'transparent', color: 'var(--green)', border: '1px solid var(--green)',
+        }}
+      >
+        {refresh.isPending || status?.refreshing ? 'Refreshing…' : 'Refresh now'}
+      </button>
+      {err && <span style={{ fontSize: 11, color: 'var(--red)' }}>{err}</span>}
+      {warn && status?.last_error && (
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }} title={status.last_error}>Reason: {status.last_error.slice(0, 80)}</span>
+      )}
+    </div>
+  )
+}
+
 // ── Main content
 function MainContent({ active }) {
   const { data: summary = {} }      = useSummary()
   const { data: distribution = {} } = useDistribution()
 
-  const fmt  = n => n ? Number(n).toLocaleString() : '—'
-  const fmtM = n => n ? `$${(n / 1e6).toFixed(1)}M` : '—'
-  const fmtP = n => n ? `${(n * 100).toFixed(1)}%` : '—'
+  const fmt  = n => n == null ? '—' : Number(n).toLocaleString()
+  const fmtM = n => n == null ? '—' : n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+  const fmtP = n => n == null ? '—' : `${(n * 100).toFixed(1)}%`
 
   // Dedicated pages
   if (active === 'analytics') return <Analytics />
@@ -614,10 +662,7 @@ cd frontend && npm install && npm run dev
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ animation: 'fadeUp .4s ease both' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-          <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em', color: '#000', padding: '4px 12px', borderRadius: 20, background: 'var(--green)' }}>Intelligence · Live</span>
-          <span style={{ fontSize: 10, color: 'var(--text-muted)', padding: '4px 12px', borderRadius: 20, border: '1px solid var(--border)' }}>Connected to Blockradar API · Demo Data</span>
-        </div>
+        <div style={{ marginBottom: 12 }}><DataStatus /></div>
         <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: 8, textTransform: 'uppercase' }}>
           Wallet Analytics &<br />Retention Insights
         </h1>
@@ -629,7 +674,7 @@ cd frontend && npm install && npm run dev
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, animation: 'fadeUp .4s ease .08s both' }}>
         <KPICard label="Transaction Volume" value={fmtM(summary.total_volume_usd)} sub="Successful only"       accent="green" icon={DollarSign} />
         <KPICard label="Total Wallets"      value={fmt(summary.total_wallets)}      sub={`${fmt(summary.total_fintechs)} fintechs`} accent="blue"  icon={Wallet} />
-        <KPICard label="Dormancy Rate"      value={fmtP(summary.dormancy_rate)}     sub="Inactive 60+ days"   accent="amber" icon={PauseCircle} />
+        <KPICard label="Dormancy Rate"      value={fmtP(summary.dormancy_rate)}     sub={summary.never_active_wallets ? `Inactive 60+ days · ${summary.never_active_wallets} never active` : 'Inactive 60+ days'}   accent="amber" icon={PauseCircle} />
         <KPICard label="High Churn Risk"    value={summary.high_risk_fintechs ?? '—'} sub="Need attention"    accent="red"   icon={AlertTriangle} />
       </div>
 

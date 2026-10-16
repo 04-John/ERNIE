@@ -6,6 +6,7 @@ const RISK_STYLES = {
   High:   { color: 'var(--red)',   bg: 'var(--red-dim)',   border: '#ef444440' },
   Medium: { color: 'var(--amber)', bg: 'var(--amber-dim)', border: '#f59e0b40' },
   Low:    { color: 'var(--green)', bg: 'var(--green-dim)', border: '#00c48c40' },
+  Unknown:{ color: 'var(--text-muted)', bg: 'transparent', border: 'var(--border)' },
 }
 
 export default function ChurnTable() {
@@ -29,7 +30,7 @@ export default function ChurnTable() {
       {/* Filters */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         {/* Risk filter */}
-        {['High', 'Medium', 'Low'].map(r => {
+        {['High', 'Medium', 'Low', 'Unknown'].map(r => {
           const s = RISK_STYLES[r]
           const active = risk === r
           return (
@@ -84,7 +85,7 @@ export default function ChurnTable() {
           </thead>
           <tbody>
             {rows.map((row, i) => {
-              const s = RISK_STYLES[row.churn_risk] || RISK_STYLES.Low
+              const s = RISK_STYLES[row.churn_risk] || RISK_STYLES.Unknown
               const prob = ((row.churn_probability || 0) * 100).toFixed(1)
               const dorm = ((row.dormancy_rate || 0) * 100).toFixed(1)
               const vol  = `$${((row.total_volume || 0) / 1000).toFixed(0)}k`
