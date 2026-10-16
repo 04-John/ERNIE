@@ -122,11 +122,12 @@ def _upsert_addresses(org_id: str, addresses: List[dict]) -> None:
         db.commit()
 
 
-def _set_balances(org_id: str, usd: Dict[str, float], symbols: Dict[str, str]) -> None:
+def _set_balances(org_id: str, usd: Dict[str, float], symbols: Dict[str, str], fetched: set) -> None:
     with SessionLocal() as db:
         for row in db.query(StoredAddress).filter(StoredAddress.org_id == org_id).all():
-            row.balance_usd = float(usd.get(row.id, 0.0))
-            row.balance_symbol = symbols.get(row.id, "")
+            if row.id in fetched:                       # keep the previous value for anything we couldn't refresh
+                row.balance_usd = float(usd.get(row.id, 0.0))
+                row.balance_symbol = symbols.get(row.id, "")
         db.commit()
 
 
@@ -229,8 +230,8 @@ async def sync_org(org_id: str, creds: Creds, force_full: bool = False) -> SyncR
     if do_full and not truncated:
         await asyncio.to_thread(_mark_full_sync, org_id)
 
-    usd, symbols = await fetch_balances(client, addresses)
-    await asyncio.to_thread(_set_balances, org_id, usd, symbols)
+    usd, symbols, fetched = await fetch_balances(client, addresses)
+    await asyncio.to_thread(_set_balances, org_id, usd, symbols, fetched)
 
     return SyncReport(added=added, updated=updated, pages=pages, full=do_full, truncated=truncated, addresses=len(addresses))
 

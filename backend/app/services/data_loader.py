@@ -245,15 +245,25 @@ def normalize_addresses(
 # BALANCES
 # ─────────────────────────────────────────────
 
+QUICK_WAIT_S = 3.0            # how long a request waits for a sync before answering "syncing"
+BALANCE_CONCURRENCY = 8
+BALANCE_BUDGET_S = 25          # balances are a nice-to-have: never let them hold up a sync
+
+
 async def fetch_balances(client, addresses_raw: list):
-    """Per-address USD balances (best effort). Returns (usd_by_id, top_symbol_by_id)."""
+    """
+    Per-address USD balances (best effort, time-boxed).
+    Returns (usd_by_id, top_symbol_by_id, fetched_ids). Addresses not in fetched_ids keep whatever
+    balance was stored by an earlier sync, so a slow API can never wipe good data.
+    """
     usd: Dict[str, float] = {}
     symbols: Dict[str, str] = {}
+    fetched: set = set()
     try:
         wallet_rows = await client.get_wallet_balances()
     except Exception as e:
         print(f"  WARN could not list wallet assets for balances: {type(e).__name__}")
-        return usd, symbols
+        return usd, symbols, fetched
     if isinstance(wallet_rows, dict):
         wallet_rows = wallet_rows.get("data", [])
 
@@ -270,7 +280,7 @@ async def fetch_balances(client, addresses_raw: list):
         print(f"  WARN {len(jobs)} balance lookups needed; capping at {MAX_BALANCE_CALLS}")
         jobs = jobs[:MAX_BALANCE_CALLS]
 
-    sem = asyncio.Semaphore(5)
+    sem = asyncio.Semaphore(BALANCE_CONCURRENCY)
     best: Dict[str, float] = {}
 
     async def one(addr_id, asset_id, sym):
@@ -279,6 +289,7 @@ async def fetch_balances(client, addresses_raw: list):
                 data = await client.get_address_balance(addr_id, asset_id)
             except Exception:
                 return
+        fetched.add(addr_id)
         converted = _to_float(data.get("convertedBalance"))
         if converted:
             usd[addr_id] = usd.get(addr_id, 0.0) + converted
@@ -287,8 +298,14 @@ async def fetch_balances(client, addresses_raw: list):
             best[addr_id] = raw_bal
             symbols[addr_id] = sym
 
-    await asyncio.gather(*(one(*j) for j in jobs))
-    return usd, symbols
+    tasks = [asyncio.create_task(one(*j)) for j in jobs]
+    if tasks:
+        _, pending = await asyncio.wait(tasks, timeout=BALANCE_BUDGET_S)
+        for t in pending:
+            t.cancel()
+        if pending:
+            print(f"  WARN balance lookups hit the {BALANCE_BUDGET_S}s budget; {len(pending)} skipped (previous values kept)")
+    return usd, symbols, fetched
 
 
 # ─────────────────────────────────────────────
@@ -500,6 +517,30 @@ async def ensure_loaded(key: str, creds: Optional[Creds] = None) -> dict:
         st.update(data_source="syncing", refreshing=True)
         _spawn(refresh_state(key, creds, "initial-sync", force=True))
     return states[key]
+
+
+async def sync_now(key: str, creds: Optional[Creds], trigger: str, force: bool = False, wait: Optional[float] = None) -> dict:
+    """
+    Start a sync and answer quickly. Small wallets finish within `wait` seconds and the caller gets the
+    finished status; larger ones keep syncing in the background (data_source "syncing") so no HTTP request
+    ever outlives a proxy timeout. Raises RuntimeError("cooldown") for rapid manual repeats.
+    """
+    wait = QUICK_WAIT_S if wait is None else wait
+    state = states.setdefault(key, empty_state())
+    if not force and time.monotonic() - state.get("_last_refresh_mono", -1e9) < MIN_REFRESH_INTERVAL_S:
+        raise RuntimeError("cooldown")
+    if not _lock_for(key).locked():
+        if state.get("data_source") in (None, "none"):
+            state.update(data_source="syncing", refreshing=True)
+        task = asyncio.create_task(refresh_state(key, creds, trigger, force=True))
+        _bg_tasks.add(task)
+        task.add_done_callback(_bg_tasks.discard)
+        task.add_done_callback(lambda t: t.cancelled() or t.exception() and print(f"[{trigger}] sync crashed: {type(t.exception()).__name__}"))
+        try:
+            await asyncio.wait_for(asyncio.shield(task), timeout=wait)
+        except asyncio.TimeoutError:
+            pass
+    return get_status(key)
 
 
 async def refresh_all(trigger: str = "scheduler") -> None:

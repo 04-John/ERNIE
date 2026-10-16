@@ -21,7 +21,7 @@ from app.models.organization import Organization, Invite
 from app.models.user import User
 from app.services.auth import get_current_user, rate_limit_auth
 from app.services.blockradar import Creds, CredentialError, verify_credentials
-from app.services.data_loader import refresh_state, drop_state, get_status
+from app.services.data_loader import sync_now, drop_state, get_status
 from app.services.sync import purge_org_data
 from app.services import email as mailer
 from app.core.config import get_settings
@@ -74,7 +74,7 @@ async def connect(req: ConnectRequest, user: User = Depends(require_admin), db: 
         purge_org_data(user.org_id)            # a different wallet: never mix its history with the old one
     save_connection(db, user.org_id, creds)
     drop_state(user.org_id)                    # forget any previous wallet's data
-    await refresh_state(user.org_id, creds, "connect", force=True)
+    await sync_now(user.org_id, creds, "connect", force=True)     # quick answer; big wallets keep syncing in the background
     return {**_summary(db, user), "status": get_status(user.org_id)}
 
 

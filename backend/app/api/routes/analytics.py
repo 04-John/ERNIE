@@ -3,7 +3,7 @@ import pandas as pd
 
 from app.api.deps import OrgCtx, org_ctx
 from app.core.state import DEMO_KEY
-from app.services.data_loader import get_status as pipeline_status, refresh_state
+from app.services.data_loader import get_status as pipeline_status, sync_now
 from app.services.sync import load_history
 import asyncio
 from fastapi import Query
@@ -67,7 +67,7 @@ async def refresh(ctx: OrgCtx = Depends(org_ctx)):
         # shared, static demo data: nothing to re-sync
         return {**pipeline_status(ctx.key), "connected": False}
     try:
-        status = await refresh_state(ctx.key, ctx.creds, "manual")
+        status = await sync_now(ctx.key, ctx.creds, "manual")
     except RuntimeError:
         raise HTTPException(status_code=429, detail="Data was refreshed moments ago. Try again in a few seconds.")
     return {**status, "connected": True}

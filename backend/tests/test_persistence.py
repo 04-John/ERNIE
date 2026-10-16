@@ -196,3 +196,78 @@ def test_history_truncation_is_reported(client, fake, monkeypatch):
     connect(client, h)
     assert status(client, h)["history_truncated"] is True
     assert counts(org_id(client, h))[1] == 100
+
+
+# ───────────── connecting must answer quickly, and balances must never block or erase data ─────────────
+
+def test_a_slow_sync_does_not_hold_the_connect_request(client, fake, monkeypatch):
+    import asyncio
+    import time as _t
+    from app.services import data_loader
+    from app.services.blockradar import BlockradarClient
+
+    async def slow_addresses(self):
+        await asyncio.sleep(1.2)                                        # a wallet that takes a while to read
+        return list(fake.datasets[self.api_key]["addresses"])
+
+    monkeypatch.setattr(BlockradarClient, "get_all_addresses", slow_addresses)
+    monkeypatch.setattr(data_loader, "QUICK_WAIT_S", 0.2)
+    h = register(client)
+
+    started = _t.time()
+    r = client.put("/workspace/connection", headers=h, json={"api_key": KEY_A, "wallet_id": WALLET_A})
+    assert r.status_code == 200 and _t.time() - started < 1.0          # answered before the sync finished
+    assert r.json()["status"]["data_source"] in ("syncing", "none")
+    assert client.get("/workspace", headers=h).json()["connection"]["connected"] is True
+
+    assert wait_for(lambda: status(client, h)["data_source"] == "real", timeout=8)     # ...and it completes by itself
+    assert client.get("/analytics/summary", headers=h).json()["data"]["total_wallets"] == 3
+
+
+def _one_asset(monkeypatch, fake, balance_fn):
+    from app.services.blockradar import BlockradarClient
+
+    async def wallet_balances(self):
+        return [{"asset": {"id": "asset-1", "asset": {"symbol": "USDC"}}, "balance": "0"}]
+
+    monkeypatch.setattr(BlockradarClient, "get_wallet_balances", wallet_balances)
+    monkeypatch.setattr(BlockradarClient, "get_address_balance", balance_fn)
+
+
+def test_balances_are_fetched_and_stored(client, fake, monkeypatch):
+    async def balance(self, address_id, asset_id):
+        return {"balance": "42", "convertedBalance": "42.5"}
+
+    _one_asset(monkeypatch, fake, balance)
+    h = register(client)
+    connect(client, h)
+    wallets = client.get("/wallets/activity", headers=h).json()["data"]
+    assert sorted(w["balanceUsd"] for w in wallets) == [42.5, 42.5, 42.5]
+    with SessionLocal() as db:
+        assert {r.balance_symbol for r in db.query(StoredAddress).filter_by(org_id=org_id(client, h))} == {"USDC"}
+
+
+def test_a_slow_balance_api_neither_blocks_the_sync_nor_erases_stored_balances(client, fake, monkeypatch):
+    import asyncio
+    from app.services import data_loader
+
+    async def fast(self, address_id, asset_id):
+        return {"balance": "10", "convertedBalance": "10"}
+
+    _one_asset(monkeypatch, fake, fast)
+    h = register(client)
+    connect(client, h)
+    org = org_id(client, h)
+    assert {w["balanceUsd"] for w in client.get("/wallets/activity", headers=h).json()["data"]} == {10.0}
+
+    async def hangs(self, address_id, asset_id):
+        await asyncio.sleep(30)                                         # the balance API stalls
+
+    _one_asset(monkeypatch, fake, hangs)
+    monkeypatch.setattr(data_loader, "BALANCE_BUDGET_S", 0.3)
+    import time as _t
+    started = _t.time()
+    refresh(client, h)
+    assert _t.time() - started < 5                                      # the sync did not wait for the stalled API
+    with SessionLocal() as db:                                          # ...and the last good balances survived
+        assert {r.balance_usd for r in db.query(StoredAddress).filter_by(org_id=org)} == {10.0}
