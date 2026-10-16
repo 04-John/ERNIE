@@ -14,12 +14,27 @@ export default function Overview({ user }) {
   const first = (user?.name || '').split(' ')[0]
 
   const noActivity = status?.data_source === 'real' && s.total_transactions === 0
+  const isDemo = status?.data_source === 'simulated'
 
   return (
     <div className="stack">
       <PageHeader eyebrow="Overview" title={first ? `Welcome back, ${first}` : 'Retention overview'}>
         Track wallet activity, spot dormant accounts and catch churn risk early.
       </PageHeader>
+
+      {isDemo && (
+        <Alert tone="warn">
+          <strong>You're viewing demo data.</strong> Connect your Blockradar wallet to see your own fintechs, volume and churn risk.{' '}
+          <a href="#/settings" className="link">Connect Blockradar →</a>
+        </Alert>
+      )}
+
+      {status?.last_error && (
+        <Alert tone="danger">
+          <strong>Blockradar sync failed.</strong> {status.data_source === 'error' ? 'No data has loaded yet.' : 'Showing your last good data.'}{' '}
+          {status.last_error} <a href="#/settings" className="link">Check connection →</a>
+        </Alert>
+      )}
 
       {noActivity && (
         <Alert tone="info">

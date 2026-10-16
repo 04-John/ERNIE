@@ -13,12 +13,12 @@ function useAlerts() {
 
   return useMemo(() => {
     const out = []
-    if (status?.data_source === 'simulated-fallback') {
-      out.push({ tone: 'danger', icon: WifiOff, title: 'Blockradar is unreachable',
-        text: `Showing demo data instead. ${status.last_error || ''}`.trim() })
+    if (status?.last_error) {
+      out.push({ tone: 'danger', icon: WifiOff, title: 'Blockradar sync failed',
+        text: status.data_source === 'error' ? status.last_error : `Showing your last good data. ${status.last_error}` })
     } else if (status?.data_source === 'simulated') {
       out.push({ tone: 'info', icon: Info, title: 'You are viewing demo data',
-        text: 'Set DATA_MODE=real on the API to use your live Blockradar wallet.' })
+        text: 'Connect your Blockradar wallet in Settings to see your own fintechs.' })
     }
     if (high?.count > 0) {
       const names = high.data.slice(0, 3).map(f => f.fintech_name).join(', ')

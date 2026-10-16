@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from typing import Optional
-from app.core.state import app_state
+from app.api.deps import OrgCtx, org_ctx
 import pandas as pd
 
 router = APIRouter()
@@ -8,6 +8,7 @@ router = APIRouter()
 
 @router.get("/scores")
 async def get_churn_scores(
+    ctx: OrgCtx = Depends(org_ctx),
     limit: int = Query(default=30, ge=1, le=200),
     risk: Optional[str] = Query(default=None, description="Filter: High, Medium, Low"),
     region: Optional[str] = Query(default=None),
@@ -16,7 +17,7 @@ async def get_churn_scores(
     Churn probability scores for all fintechs.
     Sorted by churn_probability descending.
     """
-    scores = app_state.get("churn_scores", [])
+    scores = ctx.state.get("churn_scores", [])
     if not scores:
         return {"data": []}
 
@@ -41,9 +42,9 @@ async def get_churn_scores(
 
 
 @router.get("/high-risk")
-async def get_high_risk():
+async def get_high_risk(ctx: OrgCtx = Depends(org_ctx)):
     """Shortcut — returns only High risk fintechs."""
-    scores = app_state.get("churn_scores", [])
+    scores = ctx.state.get("churn_scores", [])
     if not scores:
         return {"data": []}
 
@@ -58,9 +59,9 @@ async def get_high_risk():
 
 
 @router.get("/distribution")
-async def get_risk_distribution():
+async def get_risk_distribution(ctx: OrgCtx = Depends(org_ctx)):
     """Count of fintechs per risk tier."""
-    scores = app_state.get("churn_scores", [])
+    scores = ctx.state.get("churn_scores", [])
     if not scores:
         return {"data": {}}
 

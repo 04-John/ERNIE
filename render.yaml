@@ -25,6 +25,14 @@ services:
         value: "false"
       - key: DATA_MODE
         value: real
+      # Encrypts customers' stored Blockradar API keys. Any random string. NEVER change it later
+      # (stored keys would stop decrypting). If unset, SECRET_KEY is used instead.
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      # Optional: this account's workspace is auto-connected using the two BLOCKRADAR_* values below.
+      # Everyone else connects their own wallet in Settings.
+      - key: BOOTSTRAP_ADMIN_EMAIL
+        sync: false
       - key: BLOCKRADAR_API_KEY
         sync: false
       - key: BLOCKRADAR_WALLET_ID

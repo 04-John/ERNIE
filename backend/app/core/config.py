@@ -25,13 +25,24 @@ class Settings(BaseSettings):
     debug: bool = False
     secret_key: str = ""
 
+    # Secrets at rest (customers' Blockradar API keys). Any random string; falls back to SECRET_KEY.
+    encryption_key: str = ""
+
+    # Optional: seed this user's workspace with the BLOCKRADAR_* env credentials (self-hosting convenience)
+    bootstrap_admin_email: str = ""
+
+    # Warm the shared demo dataset in the background at startup
+    warm_demo: bool = True
+
     # Auth
     google_client_id: str = ""
     # Comma-separated list of allowed browser origins
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
 
     # Pipeline
-    data_mode: str = "simulated"  # "real" or "simulated"
+    # "real": each workspace uses its own Blockradar connection (demo data until connected)
+    # "simulated": every workspace sees demo data (local development)
+    data_mode: str = "simulated"
     pipeline_schedule_hours: float = 6
 
     @model_validator(mode="after")

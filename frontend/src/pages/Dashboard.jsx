@@ -117,7 +117,7 @@ export default function Dashboard({ theme, setTheme, user, onLogout }) {
               <span className="avatar">{initials(user)}</span>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.name || user.email}</div>
-                <div className="hint" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.company || user.email}</div>
+                <div className="hint" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.workspace || user.company || user.email}</div>
               </div>
             </div>
           )}

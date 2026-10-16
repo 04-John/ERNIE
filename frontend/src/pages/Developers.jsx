@@ -13,6 +13,11 @@ const GROUPS = [
     { m: 'GET',  p: '/analytics/status',         d: 'Pipeline status',             ret: 'data_source, last_refreshed, last_error, refreshing' },
     { m: 'POST', p: '/analytics/refresh',        d: 'Re-sync now (1 per 30s)',     ret: 'status object' },
   ]},
+  { name: 'Workspace', endpoints: [
+    { m: 'GET',    p: '/workspace',            d: 'Workspace + connection summary',     ret: 'workspace, role, connection{connected, api_key_last4, last_synced_at}' },
+    { m: 'PUT',    p: '/workspace/connection', d: 'Connect Blockradar (admin only)',    params: 'api_key, wallet_id', ret: 'workspace summary + status. The key is verified, then stored encrypted and never returned' },
+    { m: 'DELETE', p: '/workspace/connection', d: 'Disconnect and clear cached data',   ret: 'workspace summary' },
+  ]},
   { name: 'Churn', endpoints: [
     { m: 'GET', p: '/churn/scores',       d: 'Churn scores',          params: 'limit (≤200), risk, region', ret: 'fintech_id, churn_probability, churn_risk, total_volume' },
     { m: 'GET', p: '/churn/high-risk',    d: 'High-risk fintechs',    ret: 'count, data[]' },
@@ -73,7 +78,7 @@ export default function Developers() {
             {g.endpoints.map(e => (
               <div className="endpoint" key={e.p}>
                 <div className="endpoint-top">
-                  <span className={`method ${e.m === 'POST' ? 'post' : ''}`}>{e.m}</span>
+                  <span className={`method ${e.m !== 'GET' ? 'post' : ''}`}>{e.m}</span>
                   <code style={{ fontSize: 13, fontWeight: 600 }}>{e.p}</code>
                   <span style={{ fontSize: 13, color: 'var(--muted)' }}>{e.d}</span>
                 </div>

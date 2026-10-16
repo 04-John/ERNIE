@@ -3,6 +3,7 @@ import {
   fetchSummary, fetchMonthlyVolume, fetchRegional, fetchTypeBreakdown,
   fetchChurnScores, fetchDistribution, fetchDormancy, fetchHighRisk,
   fetchActivityTrend, fetchWalletList, fetchStatus, refreshData,
+  fetchWorkspace, connectBlockradar, disconnectBlockradar,
 } from '../api/client'
 
 export const useSummary       = () => useQuery({ queryKey: ['summary'],        queryFn: fetchSummary })
@@ -24,4 +25,19 @@ export const useRefresh = () => {
     // data changed server-side: drop every cached query so all views reload
     onSuccess: () => qc.invalidateQueries(),
   })
+}
+
+export const useWorkspace = () => useQuery({ queryKey: ['workspace'], queryFn: fetchWorkspace })
+
+// connecting/disconnecting changes which dataset every view shows, so reload everything
+export const useConnect = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ apiKey, walletId }) => connectBlockradar(apiKey, walletId),
+    onSuccess: () => qc.invalidateQueries(),
+  })
+}
+export const useDisconnect = () => {
+  const qc = useQueryClient()
+  return useMutation({ mutationFn: disconnectBlockradar, onSuccess: () => qc.invalidateQueries() })
 }

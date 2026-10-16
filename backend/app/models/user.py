@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, DateTime
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.sql import func
 from app.core.database import Base
 import uuid
@@ -17,6 +17,10 @@ class User(Base):
     is_verified  = Column(Boolean, default=False)
     created_at   = Column(DateTime, server_default=func.now())
     last_login   = Column(DateTime, nullable=True)
+
+    # Multi-tenancy: each user belongs to one organization (workspace)
+    org_id       = Column(String, ForeignKey("organizations.id"), index=True, nullable=True)
+    role         = Column(String, nullable=False, default="admin", server_default="admin")  # admin | member
 
     def __repr__(self):
         return f"<User {self.email}>"

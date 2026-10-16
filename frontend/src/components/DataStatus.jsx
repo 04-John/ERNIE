@@ -6,7 +6,7 @@ import { timeAgo } from '../lib/format'
 const SOURCE = {
   real:                 { tone: 'success', label: 'Live · Blockradar', live: true },
   simulated:            { tone: 'warn',    label: 'Demo data' },
-  'simulated-fallback': { tone: 'danger',  label: 'Blockradar unreachable · demo data' },
+  error:                { tone: 'danger',  label: 'Sync failed' },
 }
 
 /** Shows where the data comes from, how fresh it is, and lets the user re-sync. */

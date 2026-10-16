@@ -87,12 +87,18 @@ All endpoints except `/auth/*` and `/health` require a Bearer token. Interactive
 
 ---
 
-## Data Modes
+## Workspaces & Blockradar connections
 
-Set `DATA_MODE`:
+ERNIE is multi-tenant. Every signup creates its own **workspace** and becomes its admin; all data is scoped to the workspace, and one workspace can never see another's.
 
-- `simulated` — generates 100k wallets & ~60k transactions for demo
-- `real` — pulls your live Blockradar wallet; falls back to simulated data if the API is unreachable (the dashboard says so in a red badge)
+- A workspace with no connection sees a shared, read-only **demo dataset** (clearly labelled).
+- An admin connects a wallet under **Settings → Blockradar connection** (wallet ID + API key). The key is verified against Blockradar, then stored **encrypted** (Fernet, derived from `ENCRYPTION_KEY`) and is never returned by any endpoint or written to logs.
+- A real workspace never falls back to demo data: if a sync fails it keeps its last good data and shows the error.
+- `DATA_MODE=simulated` forces demo data for everyone (local development); `DATA_MODE=real` enables per-workspace connections.
+- Self-hosting shortcut: set `BOOTSTRAP_ADMIN_EMAIL` plus `BLOCKRADAR_API_KEY` / `BLOCKRADAR_WALLET_ID` to auto-connect that one account.
+- Upgrading an existing database is automatic: on startup users get a workspace (they become admin).
+
+Run the tests with `cd backend && pip install -r requirements-dev.txt && pytest`.
 
 ## How real data is interpreted
 
@@ -101,7 +107,7 @@ Set `DATA_MODE`:
 - An address with no transactions is **"never active"** (not dormant); with no data its churn risk is **"Unknown"**. Dormant = last successful transaction more than 60 days ago.
 - Only stablecoins (USDC, USDT, PYUSD, ...) are valued in USD (1:1); other assets are counted but not valued.
 - Region/country/type are **not invented**. Set them by putting JSON in the address `metadata`, e.g. `{"country": "Kenya", "type": "Remittance"}` (`region` is derived from country, or set it directly). Otherwise they show as Unassigned / Unclassified.
-- Data refreshes at startup, every `PIPELINE_SCHEDULE_HOURS` hours, and on demand via **Refresh now** (`POST /analytics/refresh`, max once per 30s). `GET /analytics/status` reports the source, last refresh and any fetch error.
+- Data loads on first request, refreshes every `PIPELINE_SCHEDULE_HOURS` hours for every connected workspace, and on demand via **Refresh now** (`POST /analytics/refresh`, max once per 30s). `GET /analytics/status` reports the source, last refresh and any fetch error.
 - Up to 5,000 recent transactions are read per refresh.
 
 ---

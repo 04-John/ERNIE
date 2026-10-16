@@ -1,8 +1,33 @@
+import re
 import httpx
+from dataclasses import dataclass
 from typing import Optional
 from app.core.config import get_settings
 
 settings = get_settings()
+
+_UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
+
+class CredentialError(Exception):
+    """Raised with a user-safe message when Blockradar credentials are invalid or unusable."""
+
+
+@dataclass(frozen=True)
+class Creds:
+    api_key: str
+    wallet_id: str
+
+    @staticmethod
+    def validate_format(api_key: str, wallet_id: str) -> "Creds":
+        api_key = (api_key or "").strip()
+        wallet_id = (wallet_id or "").strip()
+        # wallet_id is interpolated into request URLs, so it must be a strict UUID (no path tricks)
+        if not _UUID_RE.match(wallet_id):
+            raise CredentialError("Wallet ID must be a UUID like 123e4567-e89b-12d3-a456-426614174000.")
+        if not (16 <= len(api_key) <= 400) or any(c.isspace() for c in api_key):
+            raise CredentialError("That doesn't look like a valid Blockradar API key.")
+        return Creds(api_key=api_key, wallet_id=wallet_id)
 
 
 class BlockradarClient:
@@ -11,10 +36,11 @@ class BlockradarClient:
     Docs: https://docs.blockradar.co/en/api-reference/introduction
     """
 
-    def __init__(self):
+    def __init__(self, creds: Optional[Creds] = None):
+        # base_url is fixed server-side (never user-supplied) to prevent SSRF
         self.base_url = settings.blockradar_base_url
-        self.api_key = settings.blockradar_api_key
-        self.wallet_id = settings.blockradar_wallet_id
+        self.api_key = creds.api_key if creds else settings.blockradar_api_key
+        self.wallet_id = creds.wallet_id if creds else settings.blockradar_wallet_id
         self.headers = {
             "x-api-key": self.api_key,
             "Content-Type": "application/json",
@@ -231,3 +257,19 @@ class BlockradarClient:
             return True
         except Exception:
             return False
+
+
+async def verify_credentials(creds: Creds) -> None:
+    """Confirm the key can read the wallet. Raises CredentialError with a user-safe message."""
+    client = BlockradarClient(creds)
+    try:
+        await client.get_wallet()
+    except httpx.HTTPStatusError as e:
+        code = e.response.status_code
+        if code in (401, 403):
+            raise CredentialError("Blockradar rejected this API key for that wallet.") from None
+        if code == 404:
+            raise CredentialError("Blockradar couldn't find that wallet ID.") from None
+        raise CredentialError(f"Blockradar returned an error ({code}). Please try again.") from None
+    except httpx.HTTPError:
+        raise CredentialError("Couldn't reach Blockradar. Please try again in a moment.") from None

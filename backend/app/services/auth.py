@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.user import User
+from app.services.tenancy import create_org, default_org_name, seed_env_connection
 
 settings = get_settings()
 
@@ -91,17 +92,23 @@ def create_user(
     password: str = None,
     google_id: str = None,
 ) -> User:
+    email = email.strip().lower()
+    # every signup starts its own workspace and is its admin
+    org = create_org(db, default_org_name(name, company, email))
     user = User(
-        email=email.strip().lower(),
+        email=email,
         name=name,
         company=company,
         hashed_password=hash_password(password) if password else None,
         google_id=google_id,
         is_verified=True if google_id else False,
+        org_id=org.id,
+        role="admin",
     )
     db.add(user)
     db.commit()
     db.refresh(user)
+    seed_env_connection(db, user)
     return user
 
 

@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.core.config import get_settings
-from app.api.routes import analytics, churn, wallets, auth
+from app.api.routes import analytics, churn, wallets, auth, workspace
 from app.services.auth import get_current_user
 import asyncio
 
@@ -19,19 +19,23 @@ async def lifespan(app: FastAPI):
         print(f"  Docs     : http://localhost:{settings.api_port}/docs")
     print("=" * 55)
 
-    from app.core.database import create_tables
-    from app.models import user, wallet, transaction  # import models so SQLAlchemy sees them
+    from app.core.database import create_tables, SessionLocal
+    import app.models  # noqa: F401  (registers every table)
     create_tables()
-    print("  OK Database tables ready")
+    from app.services.tenancy import run_migrations
+    with SessionLocal() as db:
+        run_migrations(db)
+    print("  OK Database ready")
 
-    from app.services.data_loader import refresh_state
-    await refresh_state("startup", force=True)
-    print("API is ready.")
+    from app.core.state import DEMO_KEY
+    from app.services.data_loader import ensure_loaded
+    if settings.warm_demo:
+        # build the shared demo dataset in the background so the first visitor doesn't wait
+        asyncio.create_task(ensure_loaded(DEMO_KEY))
 
     from app.core.scheduler import start_scheduler
-    from app.core.state import app_state
     task = asyncio.create_task(start_scheduler())
-    app_state["scheduler_task"] = task
+    print("API is ready.")
 
     yield
 
@@ -63,6 +67,7 @@ _protected = [Depends(get_current_user)]
 app.include_router(analytics.router, prefix="/analytics", tags=["Analytics"], dependencies=_protected)
 app.include_router(churn.router,     prefix="/churn",     tags=["Churn"],     dependencies=_protected)
 app.include_router(wallets.router,   prefix="/wallets",   tags=["Wallets"],   dependencies=_protected)
+app.include_router(workspace.router, prefix="/workspace", tags=["Workspace"], dependencies=_protected)
 
 
 @app.get("/", tags=["Health"])

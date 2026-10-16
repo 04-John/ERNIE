@@ -48,6 +48,11 @@ export const fetchChurnScores  = (params = {}) => api.get('/churn/scores', { par
 export const fetchHighRisk     = () => api.get('/churn/high-risk').then(r => r.data)
 export const fetchDistribution = () => api.get('/churn/distribution').then(r => r.data.data)
 
+// ── Workspace / Blockradar connection
+export const fetchWorkspace      = () => api.get('/workspace').then(r => r.data)
+export const connectBlockradar   = (api_key, wallet_id) => api.put('/workspace/connection', { api_key, wallet_id }).then(r => r.data)
+export const disconnectBlockradar = () => api.delete('/workspace/connection').then(r => r.data)
+
 // ── Wallets
 export const fetchDormancy      = () => api.get('/wallets/dormancy').then(r => r.data.data)
 export const fetchWalletList    = (params = {}) => api.get('/wallets/activity', { params }).then(r => r.data)

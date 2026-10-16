@@ -1,9 +1,9 @@
 """
 Data Loader
 ===========
-Single place that turns Blockradar API responses (or the simulator) into the
-internal format, runs the churn pipeline and stores the result in app_state.
-Used by startup, the scheduler and the manual-refresh endpoint.
+Turns Blockradar API responses (or the demo simulator) into the internal format,
+runs the churn pipeline and stores the result in the per-workspace `states` map.
+Used by the request path (lazy load), the scheduler and the manual-refresh endpoint.
 
 Blockradar field mapping (verified against the live API / docs):
   address : id, address, name, type, network, metadata, createdAt, blockchain{slug}
@@ -15,24 +15,30 @@ Blockradar field mapping (verified against the live API / docs):
 
 Addresses carry no activity or balance fields, so activity is derived from
 transactions and balances are fetched per address/asset.
+
+Tenancy: every function that touches data takes a state `key` (an organization id,
+or DEMO_KEY for the shared read-only demo dataset). Real workspaces never fall back
+to demo data: on a failed sync they keep their last good data and surface the error.
 """
 
 import asyncio
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 import pandas as pd
 
 from app.core.config import get_settings
-from app.core.state import app_state
+from app.core.state import states, empty_state, DEMO_KEY
+from app.services.blockradar import Creds
 
 settings = get_settings()
 
 DORMANT_AFTER_DAYS = 60
 MIN_REFRESH_INTERVAL_S = 30
 MAX_BALANCE_CALLS = 300
+MAX_CONCURRENT_REFRESHES = 3
 STABLECOINS = {"USDC", "USDT", "PYUSD", "DAI", "BUSD", "FDUSD", "USDS", "USDE", "TUSD", "USDP"}
 
 REGIONS = {
@@ -48,7 +54,12 @@ REGIONS = {
     "Malaysia": "Southeast Asia", "Singapore": "Southeast Asia",
 }
 
-_lock = asyncio.Lock()
+_locks: Dict[str, asyncio.Lock] = {}
+_refresh_slots = asyncio.Semaphore(MAX_CONCURRENT_REFRESHES)
+
+
+def _lock_for(key: str) -> asyncio.Lock:
+    return _locks.setdefault(key, asyncio.Lock())
 
 
 def _parse_dt(value) -> Optional[datetime]:
@@ -241,7 +252,7 @@ async def fetch_balances(client, addresses_raw: list):
     try:
         wallet_rows = await client.get_wallet_balances()
     except Exception as e:
-        print(f"  WARN could not list wallet assets for balances: {e}")
+        print(f"  WARN could not list wallet assets for balances: {type(e).__name__}")
         return usd, symbols
     if isinstance(wallet_rows, dict):
         wallet_rows = wallet_rows.get("data", [])
@@ -284,12 +295,12 @@ async def fetch_balances(client, addresses_raw: list):
 # LOADERS
 # ─────────────────────────────────────────────
 
-async def _load_real():
+async def _load_real(creds: Creds):
     from app.services.blockradar import BlockradarClient
-    client = BlockradarClient()
+    client = BlockradarClient(creds)
 
     if not await client.ping():
-        raise RuntimeError("Blockradar API key or wallet ID rejected")
+        raise RuntimeError("Blockradar rejected the saved API key or wallet ID")
 
     addresses_raw = await client.get_all_addresses()
     transactions_raw = await client.get_all_transactions(max_pages=50)
@@ -313,61 +324,149 @@ async def _load_simulated():
     return raw["addresses"], raw["transactions"]
 
 
-async def refresh_state(trigger: str = "scheduler", force: bool = False) -> dict:
+def _empty_results() -> dict:
+    from app.services.churn_engine import compute_summary
+    return {
+        "summary": compute_summary([], [], pd.DataFrame()),
+        "churn_scores": [],
+        "monthly_volume": [],
+        "regional_summary": [],
+    }
+
+
+def _record_sync(key: str, error: Optional[str]) -> None:
+    """Persist last sync time / error on the workspace's connection row (best effort)."""
+    if key == DEMO_KEY:
+        return
+    try:
+        from app.core.database import SessionLocal
+        from app.models.organization import BlockradarConnection
+        with SessionLocal() as db:
+            conn = db.query(BlockradarConnection).filter(BlockradarConnection.org_id == key).first()
+            if conn:
+                conn.last_error = error
+                if error is None:
+                    conn.last_synced_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                db.commit()
+    except Exception as e:  # never let bookkeeping break a refresh
+        print(f"  WARN could not record sync result: {type(e).__name__}")
+
+
+async def refresh_state(key: str, creds: Optional[Creds] = None, trigger: str = "scheduler", force: bool = False) -> dict:
     """
-    Reload data and recompute everything in app_state. Serialised by a lock so
-    overlapping refreshes can't interleave; manual triggers are rate limited.
-    Returns the new status dict. Raises RuntimeError("cooldown") if too soon.
+    Reload data for one workspace and recompute its results. Serialised per key so
+    overlapping refreshes can't interleave; manual triggers are rate limited per key.
+    Raises RuntimeError("cooldown") if called again within the cooldown window.
     """
     from app.services.churn_engine import run_churn_pipeline
 
-    if _lock.locked():
-        return get_status()
-    if not force and time.monotonic() - app_state.get("_last_refresh_mono", -1e9) < MIN_REFRESH_INTERVAL_S:
+    state = states.setdefault(key, empty_state())
+    lock = _lock_for(key)
+
+    if lock.locked():
+        return get_status(key)
+    if not force and time.monotonic() - state.get("_last_refresh_mono", -1e9) < MIN_REFRESH_INTERVAL_S:
         raise RuntimeError("cooldown")
 
-    async with _lock:
-        app_state["refreshing"] = True
-        print(f"\n[{trigger}] refreshing data at {datetime.now(timezone.utc).isoformat()}")
-        try:
-            source, error = "simulated", None
-            if settings.data_mode == "real":
+    async with lock:
+        async with _refresh_slots:
+            state["refreshing"] = True
+            label = "demo" if key == DEMO_KEY else key[:8]
+            print(f"\n[{trigger}] refreshing {label} at {datetime.now(timezone.utc).isoformat()}")
+            try:
+                simulate = key == DEMO_KEY or settings.data_mode == "simulated"
+                error = None
                 try:
-                    addresses, transactions = await _load_real()
-                    source = "real"
+                    if simulate:
+                        addresses, transactions = await _load_simulated()
+                        source = "simulated"
+                    else:
+                        addresses, transactions = await _load_real(creds)
+                        source = "real"
                 except Exception as e:
-                    error = f"{type(e).__name__}: {e}"
-                    print(f"  WARN real data fetch failed ({error}); falling back to SIMULATED data")
-                    addresses, transactions = await _load_simulated()
-                    source = "simulated-fallback"
-            else:
-                addresses, transactions = await _load_simulated()
+                    # Real workspaces never fall back to demo data: keep the last good data and say what failed
+                    error = f"{type(e).__name__}: {e}"[:300]
+                    print(f"  WARN sync failed for {label}: {error}")
+                    if state.get("data_source") in (None, "none", "error"):
+                        state.update(_empty_results())
+                        state["raw"] = {"addresses": [], "transactions": []}
+                        state["data_source"] = "error"
+                    state["last_error"] = error
+                    state["_last_refresh_mono"] = time.monotonic()
+                    _record_sync(key, error)
+                    return get_status(key)
 
-            kwargs = {"as_of": pd.Timestamp.now()} if source == "real" else {}
-            results = await asyncio.to_thread(run_churn_pipeline, addresses, transactions, **kwargs)
+                kwargs = {} if simulate else {"as_of": pd.Timestamp.now()}
+                results = await asyncio.to_thread(run_churn_pipeline, addresses, transactions, **kwargs)
 
-            app_state.update(results)
-            app_state["raw"] = {"addresses": addresses, "transactions": transactions}
-            app_state["data_source"] = source
-            app_state["last_error"] = error
-            app_state["last_refreshed"] = datetime.now(timezone.utc).isoformat()
-            app_state["_last_refresh_mono"] = time.monotonic()
-            print("  Pipeline complete.")
-        finally:
-            app_state["refreshing"] = False
-    return get_status()
+                state.update(results)
+                state["raw"] = {"addresses": addresses, "transactions": transactions}
+                state["data_source"] = source
+                state["last_error"] = None
+                state["last_refreshed"] = datetime.now(timezone.utc).isoformat()
+                state["_last_refresh_mono"] = time.monotonic()
+                _record_sync(key, None)
+                print("  Pipeline complete.")
+            finally:
+                state["refreshing"] = False
+    return get_status(key)
 
 
-def get_status() -> dict:
-    raw = app_state.get("raw", {})
+async def ensure_loaded(key: str, creds: Optional[Creds] = None) -> dict:
+    """Return the workspace's state, loading it first if this is the first request since startup."""
+    state = states.get(key)
+    if state and state.get("data_source") not in (None, "none"):
+        return state
+    lock = _lock_for(key)
+    if lock.locked():                      # someone else is loading: wait for them
+        async with lock:
+            pass
+    else:
+        await refresh_state(key, creds, "first-load", force=True)
+    return states.setdefault(key, empty_state())
+
+
+async def refresh_all(trigger: str = "scheduler") -> None:
+    """Refresh every connected workspace (scheduler). One workspace failing never affects the others."""
+    from app.core.database import SessionLocal
+    from app.models.organization import BlockradarConnection
+    from app.services.tenancy import creds_from_connection
+
+    if settings.data_mode == "simulated":
+        return
+    with SessionLocal() as db:
+        jobs = []
+        for conn in db.query(BlockradarConnection).all():
+            try:
+                jobs.append((conn.org_id, creds_from_connection(conn)))
+            except ValueError as e:
+                print(f"  WARN {conn.org_id[:8]}: {e}")
+
+    async def one(org_id, creds):
+        try:
+            await refresh_state(org_id, creds, trigger, force=True)
+        except Exception as e:
+            print(f"[{trigger}] refresh failed for {org_id[:8]}: {type(e).__name__}")
+
+    await asyncio.gather(*(one(o, c) for o, c in jobs))
+
+
+def drop_state(key: str) -> None:
+    states.pop(key, None)
+    _locks.pop(key, None)
+
+
+def get_status(key: str) -> dict:
+    state = states.get(key) or empty_state()
+    raw = state.get("raw", {})
     return {
         "data_mode": settings.data_mode,
-        "data_source": app_state.get("data_source", "none"),
-        "last_refreshed": app_state.get("last_refreshed"),
-        "last_error": app_state.get("last_error"),
-        "refreshing": bool(app_state.get("refreshing")),
+        "data_source": state.get("data_source", "none"),
+        "last_refreshed": state.get("last_refreshed"),
+        "last_error": state.get("last_error"),
+        "refreshing": bool(state.get("refreshing")),
         "refresh_interval_hours": settings.pipeline_schedule_hours,
-        "total_fintechs": len(app_state.get("churn_scores", [])),
-        "total_wallets": app_state.get("summary", {}).get("total_wallets", 0),
+        "total_fintechs": len(state.get("churn_scores", [])),
+        "total_wallets": state.get("summary", {}).get("total_wallets", 0),
         "total_transactions": len(raw.get("transactions", [])),
     }

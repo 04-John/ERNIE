@@ -214,8 +214,12 @@ async def google_auth(req: GoogleAuthRequest, db: Session = Depends(get_db)):
 # ─────────────────────────────────────────────
 
 @router.get("/me")
-def get_me(user: User = Depends(get_current_user)):
+def get_me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.models.organization import Organization
+    org = db.query(Organization).filter(Organization.id == user.org_id).first()
     return {
+        "workspace":  org.name if org else None,
+        "role":       user.role,
         "id":         user.id,
         "email":      user.email,
         "name":       user.name,

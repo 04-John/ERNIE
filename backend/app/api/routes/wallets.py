@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from typing import Optional
-from app.core.state import app_state
+from app.api.deps import OrgCtx, org_ctx
 import pandas as pd
 
 router = APIRouter()
@@ -8,10 +8,11 @@ router = APIRouter()
 
 @router.get("/dormancy")
 async def get_dormancy(
+    ctx: OrgCtx = Depends(org_ctx),
     region: Optional[str] = Query(default=None),
 ):
     """Dormancy stats — overall and per region."""
-    raw = app_state.get("raw", {})
+    raw = ctx.state.get("raw", {})
     addresses = raw.get("addresses", [])
     if not addresses:
         return {"data": {}}
@@ -62,11 +63,12 @@ async def get_dormancy(
 
 @router.get("/activity")
 async def get_wallet_activity(
+    ctx: OrgCtx = Depends(org_ctx),
     fintech_id: Optional[str] = Query(default=None),
     limit: int = Query(default=100, ge=1, le=1000),
 ):
     """Raw wallet activity — filterable by fintech."""
-    raw = app_state.get("raw", {})
+    raw = ctx.state.get("raw", {})
     addresses = raw.get("addresses", [])
     if not addresses:
         return {"data": []}
@@ -88,13 +90,16 @@ async def get_wallet_activity(
 
 
 @router.get("/activity-trend")
-async def get_activity_trend(days: int = Query(default=14, ge=1, le=90)):
+async def get_activity_trend(
+    ctx: OrgCtx = Depends(org_ctx),
+    days: int = Query(default=14, ge=1, le=90),
+):
     """
     Successful transactions and distinct active wallets per day (UTC) over the
     last `days` days. In simulated data the window ends at the last transaction
     date, since simulated history stops in the past.
     """
-    raw = app_state.get("raw", {})
+    raw = ctx.state.get("raw", {})
     txs = raw.get("transactions", [])
     if not txs:
         return {"data": []}
@@ -108,7 +113,7 @@ async def get_activity_trend(days: int = Query(default=14, ge=1, le=90)):
     if df.empty:
         return {"data": []}
 
-    live = app_state.get("data_source") == "real"
+    live = ctx.state.get("data_source") == "real"
     end = pd.Timestamp.now(tz="UTC") if live else df["ts"].max()
     end_day = end.normalize()
     idx = pd.date_range(end=end_day, periods=days, freq="D")
