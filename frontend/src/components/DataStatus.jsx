@@ -6,6 +6,7 @@ import { timeAgo } from '../lib/format'
 const SOURCE = {
   real:                 { tone: 'success', label: 'Live · Blockradar', live: true },
   simulated:            { tone: 'warn',    label: 'Demo data' },
+  syncing:              { tone: 'info',    label: 'Syncing your wallet…' },
   error:                { tone: 'danger',  label: 'Sync failed' },
 }
 

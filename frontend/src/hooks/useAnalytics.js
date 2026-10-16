@@ -4,7 +4,7 @@ import {
   fetchChurnScores, fetchDistribution, fetchDormancy, fetchHighRisk,
   fetchActivityTrend, fetchWalletList, fetchStatus, refreshData,
   fetchWorkspace, connectBlockradar, disconnectBlockradar,
-  fetchMembers, fetchInvites, createInvite, revokeInvite, changeRole, removeMember,
+  fetchMembers, fetchInvites, createInvite, revokeInvite, changeRole, removeMember, fetchHistory,
 } from '../api/client'
 
 export const useSummary       = () => useQuery({ queryKey: ['summary'],        queryFn: fetchSummary })
@@ -17,7 +17,9 @@ export const useDormancy      = () => useQuery({ queryKey: ['dormancy'],       q
 export const useHighRisk      = () => useQuery({ queryKey: ['high-risk'],      queryFn: fetchHighRisk })
 export const useActivityTrend = () => useQuery({ queryKey: ['activity-trend'], queryFn: fetchActivityTrend })
 export const useWalletList    = params => useQuery({ queryKey: ['wallet-list', params], queryFn: () => fetchWalletList(params) })
-export const useStatus        = () => useQuery({ queryKey: ['status'], queryFn: fetchStatus, refetchInterval: 60_000 })
+// poll quickly while a sync is running so the UI flips to the real data as soon as it lands
+export const useStatus        = () => useQuery({ queryKey: ['status'], queryFn: fetchStatus, refetchInterval: q => (q.state.data?.refreshing ? 3_000 : 60_000) })
+export const useHistory       = days => useQuery({ queryKey: ['history', days], queryFn: () => fetchHistory(days) })
 
 export const useRefresh = () => {
   const qc = useQueryClient()

@@ -4,6 +4,9 @@ import pandas as pd
 from app.api.deps import OrgCtx, org_ctx
 from app.core.state import DEMO_KEY
 from app.services.data_loader import get_status as pipeline_status, refresh_state
+from app.services.sync import load_history
+import asyncio
+from fastapi import Query
 
 router = APIRouter()
 
@@ -68,3 +71,11 @@ async def refresh(ctx: OrgCtx = Depends(org_ctx)):
     except RuntimeError:
         raise HTTPException(status_code=429, detail="Data was refreshed moments ago. Try again in a few seconds.")
     return {**status, "connected": True}
+
+
+@router.get("/history")
+async def get_history(days: int = Query(default=90, ge=1, le=800), ctx: OrgCtx = Depends(org_ctx)):
+    """Daily snapshots of headline metrics for trend charts. Demo workspaces have no history."""
+    if ctx.key == DEMO_KEY:
+        return {"data": [], "demo": True}
+    return {"data": await asyncio.to_thread(load_history, ctx.key, days), "demo": False}

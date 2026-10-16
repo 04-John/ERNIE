@@ -22,13 +22,21 @@ def test_single_tenant_database_is_upgraded():
         ))
         conn.execute(text("INSERT INTO users (id, email, name, company, is_active) VALUES ('u1','old@example.com','Old User','Acme',1)"))
         conn.execute(text("INSERT INTO users (id, email, name, is_active) VALUES ('u2','plain@example.com',NULL,1)"))
-    Base.metadata.create_all(bind=engine)      # creates the new organizations table, leaves users alone
+    with engine.begin() as conn:               # the connections table as the previous release created it (no last_full_sync_at)
+        conn.execute(text(
+            "CREATE TABLE blockradar_connections (id VARCHAR PRIMARY KEY, org_id VARCHAR NOT NULL UNIQUE, api_key_enc TEXT NOT NULL,"
+            " api_key_last4 VARCHAR(4) NOT NULL, wallet_id VARCHAR NOT NULL, created_at DATETIME, last_synced_at DATETIME, last_error TEXT)"
+        ))
+    Base.metadata.create_all(bind=engine)      # creates the new tables, leaves existing ones alone
+    assert "last_full_sync_at" not in {c["name"] for c in inspect(engine).get_columns("blockradar_connections")}
 
     assert "org_id" not in {c["name"] for c in inspect(engine).get_columns("users")}
 
     with SessionLocal() as db:
         run_migrations(db)
         run_migrations(db)                      # idempotent: second run changes nothing
+
+    assert "last_full_sync_at" in {c["name"] for c in inspect(engine).get_columns("blockradar_connections")}
 
     with engine.connect() as conn:
         rows = conn.execute(text(

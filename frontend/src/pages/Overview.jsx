@@ -15,12 +15,26 @@ export default function Overview({ user }) {
 
   const noActivity = status?.data_source === 'real' && s.total_transactions === 0
   const isDemo = status?.data_source === 'simulated'
+  const syncing = status?.data_source === 'syncing'
 
   return (
     <div className="stack">
       <PageHeader eyebrow="Overview" title={first ? `Welcome back, ${first}` : 'Retention overview'}>
         Track wallet activity, spot dormant accounts and catch churn risk early.
       </PageHeader>
+
+      {syncing && (
+        <Alert tone="info">
+          <strong>Syncing your Blockradar wallet.</strong> The first sync reads your full history and can take a minute on a busy wallet.
+          This page updates by itself when it finishes.
+        </Alert>
+      )}
+
+      {status?.history_truncated && (
+        <Alert tone="warn">
+          <strong>Very large wallet.</strong> ERNIE stored the most recent 40,000 transactions. Older history isn't included in the analytics.
+        </Alert>
+      )}
 
       {isDemo && (
         <Alert tone="warn">
@@ -29,7 +43,7 @@ export default function Overview({ user }) {
         </Alert>
       )}
 
-      {status?.last_error && (
+      {status?.last_error && !syncing && (
         <Alert tone="danger">
           <strong>Blockradar sync failed.</strong> {status.data_source === 'error' ? 'No data has loaded yet.' : 'Showing your last good data.'}{' '}
           {status.last_error} <a href="#/settings" className="link">Check connection →</a>

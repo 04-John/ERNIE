@@ -22,6 +22,7 @@ from app.models.user import User
 from app.services.auth import get_current_user, rate_limit_auth
 from app.services.blockradar import Creds, CredentialError, verify_credentials
 from app.services.data_loader import refresh_state, drop_state, get_status
+from app.services.sync import purge_org_data
 from app.services.tenancy import (
     get_connection, save_connection, delete_connection, mask_wallet_id,
     create_invite, pending_invites, VALID_ROLES, MAX_PENDING_INVITES,
@@ -64,6 +65,9 @@ async def connect(req: ConnectRequest, user: User = Depends(require_admin), db: 
     except CredentialError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
+    previous = get_connection(db, user.org_id)
+    if previous and previous.wallet_id != creds.wallet_id:
+        purge_org_data(user.org_id)            # a different wallet: never mix its history with the old one
     save_connection(db, user.org_id, creds)
     drop_state(user.org_id)                    # forget any previous wallet's data
     await refresh_state(user.org_id, creds, "connect", force=True)
@@ -73,6 +77,7 @@ async def connect(req: ConnectRequest, user: User = Depends(require_admin), db: 
 @router.delete("/connection")
 def disconnect(user: User = Depends(require_admin), db: Session = Depends(get_db)):
     delete_connection(db, user.org_id)
+    purge_org_data(user.org_id)                # disconnecting deletes everything stored from that wallet
     drop_state(user.org_id)
     return _summary(db, user)
 

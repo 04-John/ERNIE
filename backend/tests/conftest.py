@@ -1,5 +1,7 @@
+import math
 import os
 import tempfile
+from datetime import datetime, timedelta, timezone
 
 # Configure BEFORE the app is imported (settings and the DB engine are created at import time)
 _db = os.path.join(tempfile.mkdtemp(), "test.db")
@@ -20,25 +22,8 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.services import data_loader, auth as auth_service
+from app.services.blockradar import BlockradarClient
 from app.core.state import states
-
-
-def _dataset(prefix: str, n: int):
-    """A tiny normalized dataset: n addresses, each with one successful deposit."""
-    raw_addrs = [
-        {"id": f"{prefix}-a{i}", "address": f"{prefix}Addr{i}", "name": f"{prefix.upper()} Fintech {i}",
-         "createdAt": "2026-01-01T00:00:00Z", "blockchain": {"slug": "solana"}, "metadata": None}
-        for i in range(n)
-    ]
-    raw_txs = [
-        {"id": f"{prefix}-t{i}", "type": "DEPOSIT", "status": "SUCCESS", "amount": "100",
-         "asset": {"symbol": "USDC"}, "address": {"id": f"{prefix}-a{i}"},
-         "createdAt": "2026-10-01T00:00:00Z"}
-        for i in range(n)
-    ]
-    txs = data_loader.normalize_transactions(raw_txs, {})
-    return data_loader.normalize_addresses(raw_addrs, txs), txs
-
 
 KEY_A = "key-for-workspace-a-0123456789"
 KEY_B = "key-for-workspace-b-0123456789"
@@ -46,26 +31,86 @@ WALLET_A = "11111111-1111-1111-1111-111111111111"
 WALLET_B = "22222222-2222-2222-2222-222222222222"
 
 
-@pytest.fixture(autouse=True)
-def fakes(monkeypatch):
-    """No network: Blockradar and the simulator are replaced with deterministic fakes."""
-    calls = {"real_fail": False}
+def _iso(minutes_ago: float) -> str:
+    return (datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)).isoformat().replace("+00:00", "Z")
 
-    async def fake_real(creds):
-        if calls["real_fail"]:
+
+def raw_address(prefix: str, i: int) -> dict:
+    return {"id": f"{prefix}-a{i}", "address": f"{prefix}Addr{i}", "name": f"{prefix.upper()} Fintech {i}",
+            "createdAt": "2026-01-01T00:00:00Z", "blockchain": {"slug": "solana"}, "metadata": None}
+
+
+def raw_tx(prefix: str, i: int, n_addr: int, minutes_ago: float, status: str = "SUCCESS") -> dict:
+    a = i % n_addr
+    return {"id": f"{prefix}-t{i}", "type": "DEPOSIT", "status": status, "amount": "100",
+            "asset": {"symbol": "USDC"}, "address": {"id": f"{prefix}-a{a}", "address": f"{prefix}Addr{a}"},
+            "createdAt": _iso(minutes_ago)}
+
+
+def make_dataset(prefix: str, n_addr: int, n_tx=None, order: str = "desc") -> dict:
+    """Blockradar-shaped data. Transactions are returned in API order (desc = newest first)."""
+    n_tx = n_addr if n_tx is None else n_tx
+    txs = [raw_tx(prefix, i, n_addr, minutes_ago=i + 1) for i in range(n_tx)]   # index 0 is the newest
+    if order == "asc":
+        txs.reverse()
+    return {"addresses": [raw_address(prefix, i) for i in range(n_addr)], "txs": txs}
+
+
+class FakeBlockradar:
+    """A stand-in for the Blockradar API, keyed by API key. Counts transaction-page requests."""
+
+    def __init__(self):
+        self.fail = False
+        self.tx_pages = 0
+        self.datasets = {}
+
+    def reset(self):
+        self.fail = False
+        self.tx_pages = 0
+        self.datasets = {KEY_A: make_dataset("a", 3), KEY_B: make_dataset("b", 5)}
+
+
+def _demo_dataset():
+    ds = make_dataset("demo", 7)
+    txs = data_loader.normalize_transactions(ds["txs"], {})
+    return data_loader.normalize_addresses(ds["addresses"], txs), txs
+
+
+@pytest.fixture(autouse=True)
+def fake(monkeypatch):
+    """No network: the Blockradar client and the simulator are replaced with deterministic fakes."""
+    f = FakeBlockradar()
+    f.reset()
+
+    async def ping(self):
+        if f.fail:
             raise RuntimeError("Blockradar is down")
-        # dataset size depends on which key was used, proving per-workspace credentials are honoured
-        return _dataset("a", 3) if creds.api_key == KEY_A else _dataset("b", 5)
+        return self.api_key in f.datasets
+
+    async def get_all_addresses(self):
+        return list(f.datasets[self.api_key]["addresses"])
+
+    async def get_transactions(self, page=1, limit=100, status=None):
+        f.tx_pages += 1
+        txs = f.datasets[self.api_key]["txs"]
+        chunk = txs[(page - 1) * limit: page * limit]
+        return {"data": chunk, "meta": {"currentPage": page, "totalPages": max(math.ceil(len(txs) / limit), 1), "total": len(txs)}}
+
+    async def get_wallet_balances(self):
+        return []
 
     async def fake_sim():
-        return _dataset("demo", 7)
+        return _demo_dataset()
 
     async def fake_verify(creds):
         from app.services.blockradar import CredentialError
         if creds.api_key not in (KEY_A, KEY_B):
             raise CredentialError("Blockradar rejected this API key for that wallet.")
 
-    monkeypatch.setattr(data_loader, "_load_real", fake_real)
+    monkeypatch.setattr(BlockradarClient, "ping", ping)
+    monkeypatch.setattr(BlockradarClient, "get_all_addresses", get_all_addresses)
+    monkeypatch.setattr(BlockradarClient, "get_transactions", get_transactions)
+    monkeypatch.setattr(BlockradarClient, "get_wallet_balances", get_wallet_balances)
     monkeypatch.setattr(data_loader, "_load_simulated", fake_sim)
     monkeypatch.setattr(data_loader, "MIN_REFRESH_INTERVAL_S", 0)
     import app.api.routes.workspace as ws
@@ -74,7 +119,7 @@ def fakes(monkeypatch):
     states.clear()
     data_loader._locks.clear()
     auth_service._attempts.clear()
-    yield calls
+    yield f
 
 
 @pytest.fixture()

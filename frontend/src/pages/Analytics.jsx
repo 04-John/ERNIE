@@ -5,6 +5,7 @@ import { PageHeader, StatCard, Card, EmptyState, ChartTooltip } from '../compone
 import ChurnTable from '../components/ChurnTable'
 import TopRiskList from '../components/TopRiskList'
 import RegionalCards from '../components/RegionalCards'
+import TrendsCard from '../components/TrendsCard'
 import { fmtNum } from '../lib/format'
 
 export default function Analytics() {
@@ -28,6 +29,8 @@ export default function Analytics() {
         <StatCard loading={isLoading} label="Low risk"    value={fmtNum(low)}    sub={share(low)}    tone="success" icon={CheckCircle2} />
         <StatCard loading={isLoading} label="Not scored"  value={fmtNum(dist.Unknown)} sub="No transaction history yet" tone="neutral" icon={HelpCircle} />
       </div>
+
+      <TrendsCard />
 
       <div className="grid-2">
         <Card title="Average volume by fintech type" subtitle="USD (thousands)" chip="Per fintech">

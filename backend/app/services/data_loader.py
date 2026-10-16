@@ -295,27 +295,24 @@ async def fetch_balances(client, addresses_raw: list):
 # LOADERS
 # ─────────────────────────────────────────────
 
-async def _load_real(creds: Creds):
-    from app.services.blockradar import BlockradarClient
-    client = BlockradarClient(creds)
-
-    if not await client.ping():
-        raise RuntimeError("Blockradar rejected the saved API key or wallet ID")
-
-    addresses_raw = await client.get_all_addresses()
-    transactions_raw = await client.get_all_transactions(max_pages=50)
-    if not addresses_raw:
-        raise RuntimeError("No addresses returned for this wallet")
-
-    address_index = {
-        str(a.get("address", "")).lower(): a["id"] for a in addresses_raw if a.get("id") and a.get("address")
-    }
-    transactions = normalize_transactions(transactions_raw, address_index)
-    balances_usd, symbols = await fetch_balances(client, addresses_raw)
-    addresses = normalize_addresses(addresses_raw, transactions, balances_usd, symbols)
-
-    print(f"  Normalized: {len(addresses)} addresses, {len(transactions)} transactions")
+def _build_from_db(key: str):
+    """Rebuild the normalized dataset from what is stored for this workspace (no network)."""
+    from app.services import sync
+    addrs_raw, txs_raw, usd, symbols = sync.load_dataset(key)
+    index = {str(a.get("address") or "").lower(): a["id"] for a in addrs_raw if a.get("id") and a.get("address")}
+    transactions = normalize_transactions(txs_raw, index)
+    addresses = normalize_addresses(addrs_raw, transactions, usd, symbols)
     return addresses, transactions
+
+
+async def _sync_and_build(key: str, creds: Creds):
+    """Pull new data from Blockradar into the database, then build the dataset from the database."""
+    from app.services import sync
+    report = await sync.sync_org(key, creds)
+    addresses, transactions = await asyncio.to_thread(_build_from_db, key)
+    print(f"  Synced: +{report['added']} new / {report['updated']} updated transactions in {report['pages']} page(s)"
+          f"{' (full)' if report['full'] else ''}; {len(addresses)} addresses, {len(transactions)} stored transactions")
+    return addresses, transactions, report
 
 
 async def _load_simulated():
@@ -352,12 +349,26 @@ def _record_sync(key: str, error: Optional[str]) -> None:
         print(f"  WARN could not record sync result: {type(e).__name__}")
 
 
+_bg_tasks: set = set()
+
+
+def _spawn(coro) -> None:
+    """Run a coroutine in the background, keeping a reference so it isn't garbage collected."""
+    task = asyncio.create_task(coro)
+    _bg_tasks.add(task)
+    task.add_done_callback(_bg_tasks.discard)
+
+
 async def refresh_state(key: str, creds: Optional[Creds] = None, trigger: str = "scheduler", force: bool = False) -> dict:
     """
-    Reload data for one workspace and recompute its results. Serialised per key so
-    overlapping refreshes can't interleave; manual triggers are rate limited per key.
+    Re-sync one workspace and recompute its results. Serialised per key so overlapping
+    refreshes can't interleave; manual triggers are rate limited per key.
     Raises RuntimeError("cooldown") if called again within the cooldown window.
+
+    Real workspaces never see demo data. If Blockradar can't be reached we fall back to what
+    is stored in the database (stale but real) and surface the error.
     """
+    from app.services import sync
     from app.services.churn_engine import run_churn_pipeline
 
     state = states.setdefault(key, empty_state())
@@ -375,26 +386,30 @@ async def refresh_state(key: str, creds: Optional[Creds] = None, trigger: str = 
             print(f"\n[{trigger}] refreshing {label} at {datetime.now(timezone.utc).isoformat()}")
             try:
                 simulate = key == DEMO_KEY or settings.data_mode == "simulated"
-                error = None
+                error, report = None, None
                 try:
                     if simulate:
                         addresses, transactions = await _load_simulated()
                         source = "simulated"
                     else:
-                        addresses, transactions = await _load_real(creds)
+                        addresses, transactions, report = await _sync_and_build(key, creds)
                         source = "real"
                 except Exception as e:
-                    # Real workspaces never fall back to demo data: keep the last good data and say what failed
                     error = f"{type(e).__name__}: {e}"[:300]
                     print(f"  WARN sync failed for {label}: {error}")
-                    if state.get("data_source") in (None, "none", "error"):
-                        state.update(_empty_results())
-                        state["raw"] = {"addresses": [], "transactions": []}
-                        state["data_source"] = "error"
                     state["last_error"] = error
                     state["_last_refresh_mono"] = time.monotonic()
                     _record_sync(key, error)
-                    return get_status(key)
+                    if state.get("data_source") == "real":
+                        return get_status(key)                     # keep serving the last good data
+                    if simulate or not await asyncio.to_thread(sync.has_stored_data, key):
+                        state.update(_empty_results())
+                        state["raw"] = {"addresses": [], "transactions": []}
+                        state["data_source"] = "error"
+                        return get_status(key)
+                    # first request after a restart with Blockradar down: serve what we stored
+                    addresses, transactions = await asyncio.to_thread(_build_from_db, key)
+                    source = "real"
 
                 kwargs = {} if simulate else {"as_of": pd.Timestamp.now()}
                 results = await asyncio.to_thread(run_churn_pipeline, addresses, transactions, **kwargs)
@@ -402,28 +417,75 @@ async def refresh_state(key: str, creds: Optional[Creds] = None, trigger: str = 
                 state.update(results)
                 state["raw"] = {"addresses": addresses, "transactions": transactions}
                 state["data_source"] = source
-                state["last_error"] = None
+                state["last_error"] = error
+                state["truncated"] = bool(report and report["truncated"])
+                state["last_sync"] = {k: report[k] for k in ("added", "updated", "full")} if report else None
                 state["last_refreshed"] = datetime.now(timezone.utc).isoformat()
                 state["_last_refresh_mono"] = time.monotonic()
-                _record_sync(key, None)
+                if not simulate:
+                    _record_sync(key, error)
+                    if error is None:
+                        await asyncio.to_thread(sync.save_snapshot, key, results)
                 print("  Pipeline complete.")
             finally:
                 state["refreshing"] = False
     return get_status(key)
 
 
+async def _rebuild_from_db(key: str) -> None:
+    """Restart path: rebuild a workspace's state from stored data with no network calls."""
+    from app.core.database import SessionLocal
+    from app.models.organization import BlockradarConnection
+    from app.services.churn_engine import run_churn_pipeline
+
+    addresses, transactions = await asyncio.to_thread(_build_from_db, key)
+    results = await asyncio.to_thread(run_churn_pipeline, addresses, transactions, as_of=pd.Timestamp.now())
+    with SessionLocal() as db:
+        conn = db.query(BlockradarConnection).filter(BlockradarConnection.org_id == key).first()
+        synced = conn.last_synced_at.replace(tzinfo=timezone.utc).isoformat() if conn and conn.last_synced_at else None
+    state = states.setdefault(key, empty_state())
+    state.update(results)
+    state["raw"] = {"addresses": addresses, "transactions": transactions}
+    state["data_source"] = "real"
+    state["last_refreshed"] = synced
+    state["last_error"] = None
+    print(f"  Restored {key[:8]} from the database ({len(addresses)} addresses, {len(transactions)} transactions)")
+
+
 async def ensure_loaded(key: str, creds: Optional[Creds] = None) -> dict:
-    """Return the workspace's state, loading it first if this is the first request since startup."""
+    """
+    Return the workspace's state, loading it first if this is the first request since startup.
+    Demo / simulated data is built inline. A real workspace is restored from the database
+    instantly (and caught up in the background); a brand-new one starts a background sync and
+    reports data_source="syncing" so the first request never waits on a large wallet.
+    """
+    from app.services import sync
+
     state = states.get(key)
     if state and state.get("data_source") not in (None, "none"):
         return state
+
+    simulate = key == DEMO_KEY or settings.data_mode == "simulated"
     lock = _lock_for(key)
-    if lock.locked():                      # someone else is loading: wait for them
-        async with lock:
-            pass
+    if simulate:
+        if lock.locked():
+            async with lock:
+                pass
+        else:
+            await refresh_state(key, creds, "first-load", force=True)
+        return states.setdefault(key, empty_state())
+
+    if lock.locked():
+        return states.setdefault(key, empty_state())
+
+    if await asyncio.to_thread(sync.has_stored_data, key):
+        await _rebuild_from_db(key)
+        _spawn(refresh_state(key, creds, "catch-up", force=True))
     else:
-        await refresh_state(key, creds, "first-load", force=True)
-    return states.setdefault(key, empty_state())
+        st = states.setdefault(key, empty_state())
+        st.update(data_source="syncing", refreshing=True)
+        _spawn(refresh_state(key, creds, "initial-sync", force=True))
+    return states[key]
 
 
 async def refresh_all(trigger: str = "scheduler") -> None:
@@ -460,6 +522,8 @@ def get_status(key: str) -> dict:
     state = states.get(key) or empty_state()
     raw = state.get("raw", {})
     return {
+        "history_truncated": bool(state.get("truncated")),
+        "last_sync": state.get("last_sync"),
         "data_mode": settings.data_mode,
         "data_source": state.get("data_source", "none"),
         "last_refreshed": state.get("last_refreshed"),

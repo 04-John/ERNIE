@@ -41,6 +41,7 @@ export const fetchSummary       = () => api.get('/analytics/summary').then(r => 
 export const fetchMonthlyVolume = () => api.get('/analytics/monthly-volume').then(r => r.data.data)
 export const fetchRegional      = () => api.get('/analytics/regional').then(r => r.data.data)
 export const fetchTypeBreakdown = () => api.get('/analytics/type-breakdown').then(r => r.data.data)
+export const fetchHistory       = (days = 90) => api.get('/analytics/history', { params: { days } }).then(r => r.data)
 export const fetchStatus        = () => api.get('/analytics/status').then(r => r.data)
 export const refreshData        = () => api.post('/analytics/refresh').then(r => r.data)
 

@@ -1,10 +1,12 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { LayoutDashboard, BarChart3, Wallet, Code2, Settings, LogOut, Menu, Sun, Moon, ChevronDown } from 'lucide-react'
 import Logo from '../components/Logo'
 import DataStatus from '../components/DataStatus'
 import Notifications from '../components/Notifications'
 import { Skeleton } from '../components/ui'
 import { initials } from '../lib/format'
+import { useStatus } from '../hooks/useAnalytics'
 
 // Pages load on demand so the first paint stays small (charts are the heavy part)
 const Overview   = lazy(() => import('./Overview'))
@@ -79,7 +81,20 @@ function UserMenu({ user, onLogout }) {
   )
 }
 
+// When a background sync finishes, reload every view so it shows the freshly synced data
+function useSyncWatcher() {
+  const { data } = useStatus()
+  const qc = useQueryClient()
+  const wasRefreshing = useRef(false)
+  const refreshing = Boolean(data?.refreshing)
+  useEffect(() => {
+    if (wasRefreshing.current && !refreshing) qc.invalidateQueries()
+    wasRefreshing.current = refreshing
+  }, [refreshing, qc])
+}
+
 export default function Dashboard({ theme, setTheme, user, onLogout }) {
+  useSyncWatcher()
   const route = useRoute()
   const [drawer, setDrawer] = useState(false)
   const current = ALL.find(n => n.id === route)

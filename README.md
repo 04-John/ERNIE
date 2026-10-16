@@ -107,8 +107,12 @@ Run the tests with `cd backend && pip install -r requirements-dev.txt && pytest`
 - An address with no transactions is **"never active"** (not dormant); with no data its churn risk is **"Unknown"**. Dormant = last successful transaction more than 60 days ago.
 - Only stablecoins (USDC, USDT, PYUSD, ...) are valued in USD (1:1); other assets are counted but not valued.
 - Region/country/type are **not invented**. Set them by putting JSON in the address `metadata`, e.g. `{"country": "Kenya", "type": "Remittance"}` (`region` is derived from country, or set it directly). Otherwise they show as Unassigned / Unclassified.
-- Data loads on first request, refreshes every `PIPELINE_SCHEDULE_HOURS` hours for every connected workspace, and on demand via **Refresh now** (`POST /analytics/refresh`, max once per 30s). `GET /analytics/status` reports the source, last refresh and any fetch error.
-- Up to 5,000 recent transactions are read per refresh.
+- **Stored in your database.** Addresses, transactions and per-address balances are saved per workspace, so a restart rebuilds the dashboard instantly from the database instead of re-downloading everything. Disconnecting (or switching to a different wallet) permanently deletes that workspace's stored data and history.
+- **First sync runs in the background** (the dashboard shows "Syncing…" and updates itself). It reads the full history, up to 40,000 transactions; beyond that the dashboard says so.
+- **Later syncs are incremental.** ERNIE only stops early when the transaction list is provably newest-first and a whole page is already stored in a final status (never assumed). Otherwise it keeps paging, and it does a full re-fetch at least every 24 hours to catch stuck or changed transactions.
+- Syncs run at startup catch-up, every `PIPELINE_SCHEDULE_HOURS` hours for every connected workspace, and on demand (`POST /analytics/refresh`, max once per 30s). `GET /analytics/status` reports the source, last refresh, last sync result and any error.
+- **History.** One snapshot of the headline metrics is saved per workspace per day and powers the Trends chart (`GET /analytics/history`).
+- If Blockradar is unreachable ERNIE serves the stored data and shows the error. It never substitutes demo data for a connected workspace.
 
 ---
 

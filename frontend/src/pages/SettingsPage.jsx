@@ -11,6 +11,7 @@ import { fmtNum, timeAgo, copyText } from '../lib/format'
 const SOURCE_LABEL = {
   real: { tone: 'success', text: 'Live Blockradar data' },
   simulated: { tone: 'warn', text: 'Demo data' },
+  syncing: { tone: 'info', text: 'First sync in progress…' },
   error: { tone: 'danger', text: 'Sync failed, no data loaded yet' },
 }
 

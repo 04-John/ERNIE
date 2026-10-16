@@ -25,6 +25,7 @@ class BlockradarConnection(Base):
     created_at     = Column(DateTime, server_default=func.now())
     last_synced_at = Column(DateTime, nullable=True)
     last_error     = Column(Text, nullable=True)
+    last_full_sync_at = Column(DateTime, nullable=True)   # last complete (non-incremental) transaction fetch
 
 
 class Invite(Base):

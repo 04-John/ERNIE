@@ -99,12 +99,12 @@ def test_disconnect_returns_to_demo_and_clears_data(client):
         assert db.query(BlockradarConnection).filter(BlockradarConnection.org_id == org_id).count() == 0
 
 
-def test_failed_sync_keeps_last_good_data_and_reports_error(client, fakes):
+def test_failed_sync_keeps_last_good_data_and_reports_error(client, fake):
     h = register(client)
     connect(client, h)
     assert summary(client, h)["total_wallets"] == 3
 
-    fakes["real_fail"] = True
+    fake.fail = True
     r = client.post("/analytics/refresh", headers=h)
     assert r.status_code == 200
     st = status(client, h)

@@ -177,6 +177,12 @@ def run_migrations(db: Session) -> None:
                 conn.execute(text("ALTER TABLE users ADD COLUMN role VARCHAR NOT NULL DEFAULT 'admin'"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_users_org_id ON users (org_id)"))
 
+    if "blockradar_connections" in insp.get_table_names():
+        ccols = {c["name"] for c in insp.get_columns("blockradar_connections")}
+        if "last_full_sync_at" not in ccols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE blockradar_connections ADD COLUMN last_full_sync_at TIMESTAMP"))
+
     orphans = db.query(User).filter(User.org_id.is_(None)).all()
     for user in orphans:
         org = create_org(db, default_org_name(user.name, user.company, user.email))
