@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Bell, AlertTriangle, PauseCircle, WifiOff, Info, CheckCircle2, Hourglass } from 'lucide-react'
-import { useStatus, useSummary, useHighRisk } from '../hooks/useAnalytics'
+import { useStatus, useSummary, useHighRisk, useAlertEvents } from '../hooks/useAnalytics'
 import { timeAgo } from '../lib/format'
 
 const ICON = { danger: AlertTriangle, warn: PauseCircle, info: Info, success: CheckCircle2 }
+const EVENT_TONE = { high_risk: 'danger', recovered: 'success', sync_failed: 'warn' }
 
 /** Alerts are derived from live data: nothing here is hard-coded. */
 function useAlerts() {
@@ -42,6 +43,7 @@ export default function Notifications() {
   const ref = useRef(null)
   const { data: status } = useStatus()
   const alerts = useAlerts()
+  const { data: events = [] } = useAlertEvents()
   const urgent = alerts.filter(a => a.tone === 'danger' || a.tone === 'warn').length
 
   useEffect(() => {
@@ -84,6 +86,26 @@ export default function Notifications() {
               </div>
             )
           })}
+          {events.length > 0 && (
+            <>
+              <div className="popover-head" style={{ background: 'var(--surface-2)' }}>
+                <strong style={{ fontSize: 12, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--muted)' }}>Recent activity</strong>
+              </div>
+              <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+                {events.slice(0, 12).map(e => (
+                  <div className="popover-item" key={e.id} style={{ padding: '10px 16px' }}>
+                    <span className={`stat-icon tone-${EVENT_TONE[e.kind] || 'neutral'}`} style={{ width: 28, height: 28, borderRadius: 8, flexShrink: 0 }}>
+                      {e.kind === 'recovered' ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+                    </span>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{e.title}</div>
+                      <div style={{ fontSize: 12, color: 'var(--muted)' }}>{timeAgo(e.created_at)}{e.detail ? ` · ${e.detail}` : ''}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

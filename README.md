@@ -117,6 +117,15 @@ Set these on the API (`blockradar-api` on Render):
 
 What it enables: **forgot password** (1-hour single-use link, 3 per address per hour, ends all other sessions), **email confirmation** (banner + resend), and **emailed invites** (a checkbox on the Team card). Links are stored hashed, single-use and expire. Use `DEBUG=true` locally with the default `console` backend to see emails in the server log.
 
+## Alerts
+
+Admins add alert channels under **Settings → Alerts**: **email** (to workspace members only), **Slack** (incoming-webhook URL) or a signed **webhook**.
+
+- After every sync ERNIE compares each fintech with its previous risk tier and sends **one digest per channel** when a fintech newly becomes **High** risk, recovers, or when the Blockradar sync starts failing. The first sync only records a baseline, and a fintech that flaps is alerted at most once per 24 hours.
+- Alert history is stored and shown in the bell. A failing channel is flagged in Settings and never affects syncing; a **Send test** button checks each one.
+- **Webhooks** receive JSON (`type: "ernie.alerts"`) with `X-ERNIE-Signature: sha256=<HMAC-SHA256 of the raw body, keyed with the secret shown once at creation>`.
+- **SSRF protection:** webhook/Slack URLs must be `https`, public, port 443, with no credentials. The hostname is resolved and rejected if any address is private or internal (localhost, 10.x, 169.254.169.254, ...), the check is repeated on every send, and redirects are never followed. Targets are encrypted at rest and never returned in full.
+
 ## How real data is interpreted
 
 - Each Blockradar **child address = one fintech**, named after the address `name`.

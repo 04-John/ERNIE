@@ -11,12 +11,21 @@ const GROUPS = [
     { m: 'GET',  p: '/analytics/regional',       d: 'Per-region aggregates',       ret: 'region, fintechs, total_wallets, activation_rate, avg_churn_prob' },
     { m: 'GET',  p: '/analytics/type-breakdown', d: 'Volume by fintech type',      ret: 'type, count, avg_volume_k, high_risk' },
     { m: 'GET',  p: '/analytics/status',         d: 'Pipeline status',             ret: 'data_source, last_refreshed, last_error, refreshing' },
+    { m: 'GET',  p: '/analytics/history',        d: 'Daily metric snapshots',      params: 'days (≤800)', ret: 'day, dormancy_rate, active_wallets, high_risk, total_volume_usd' },
     { m: 'POST', p: '/analytics/refresh',        d: 'Re-sync now (1 per 30s)',     ret: 'status object' },
   ]},
   { name: 'Workspace', endpoints: [
     { m: 'GET',    p: '/workspace',            d: 'Workspace + connection summary',     ret: 'workspace, role, connection{connected, api_key_last4, last_synced_at}' },
     { m: 'PUT',    p: '/workspace/connection', d: 'Connect Blockradar (admin only)',    params: 'api_key, wallet_id', ret: 'workspace summary + status. The key is verified, then stored encrypted and never returned' },
     { m: 'DELETE', p: '/workspace/connection', d: 'Disconnect and clear cached data',   ret: 'workspace summary' },
+  ]},
+  { name: 'Alerts', endpoints: [
+    { m: 'GET',    p: '/workspace/alerts/events',   d: 'Recent alert history (any member)',  ret: 'kind, fintech_name, title, detail, created_at' },
+    { m: 'GET',    p: '/workspace/alerts/channels', d: 'List alert channels (admin)',         ret: 'id, kind, label, hint, enabled, last_sent_at, last_error' },
+    { m: 'POST',   p: '/workspace/alerts/channels', d: 'Add email / Slack / webhook (admin)', params: 'kind, target, label', ret: 'channel (+ one-time webhook secret)' },
+    { m: 'PATCH',  p: '/workspace/alerts/channels/{id}',      d: 'Enable or disable (admin)', params: 'enabled', ret: 'channel' },
+    { m: 'POST',   p: '/workspace/alerts/channels/{id}/test', d: 'Send a test message (admin)', ret: 'ok, error' },
+    { m: 'DELETE', p: '/workspace/alerts/channels/{id}',      d: 'Remove a channel (admin)', ret: 'removed' },
   ]},
   { name: 'Churn', endpoints: [
     { m: 'GET', p: '/churn/scores',       d: 'Churn scores',          params: 'limit (≤200), risk, region', ret: 'fintech_id, churn_probability, churn_risk, total_volume' },

@@ -67,6 +67,14 @@ export const revokeInvite  = id => api.delete(`/workspace/invites/${id}`).then(r
 export const changeRole    = (id, role) => api.patch(`/workspace/members/${id}`, { role }).then(r => r.data)
 export const removeMember  = id => api.delete(`/workspace/members/${id}`).then(r => r.data)
 
+// ── Alerts
+export const fetchChannels    = () => api.get('/workspace/alerts/channels').then(r => r.data)
+export const addChannel       = (kind, target, label) => api.post('/workspace/alerts/channels', { kind, target, label }).then(r => r.data)
+export const toggleChannel    = (id, enabled) => api.patch(`/workspace/alerts/channels/${id}`, { enabled }).then(r => r.data)
+export const removeChannel    = id => api.delete(`/workspace/alerts/channels/${id}`).then(r => r.data)
+export const testChannel      = id => api.post(`/workspace/alerts/channels/${id}/test`).then(r => r.data)
+export const fetchAlertEvents = () => api.get('/workspace/alerts/events').then(r => r.data.data)
+
 // ── Wallets
 export const fetchDormancy      = () => api.get('/wallets/dormancy').then(r => r.data.data)
 export const fetchWalletList    = (params = {}) => api.get('/wallets/activity', { params }).then(r => r.data)

@@ -368,7 +368,7 @@ async def refresh_state(key: str, creds: Optional[Creds] = None, trigger: str = 
     Real workspaces never see demo data. If Blockradar can't be reached we fall back to what
     is stored in the database (stale but real) and surface the error.
     """
-    from app.services import sync
+    from app.services import sync, alerts
     from app.services.churn_engine import run_churn_pipeline
 
     state = states.setdefault(key, empty_state())
@@ -397,9 +397,12 @@ async def refresh_state(key: str, creds: Optional[Creds] = None, trigger: str = 
                 except Exception as e:
                     error = f"{type(e).__name__}: {e}"[:300]
                     print(f"  WARN sync failed for {label}: {error}")
+                    was_ok = state.get("last_error") is None and state.get("data_source") == "real"
                     state["last_error"] = error
                     state["_last_refresh_mono"] = time.monotonic()
                     _record_sync(key, error)
+                    if was_ok and not simulate:
+                        _alert_sync_failure(key, error)
                     if state.get("data_source") == "real":
                         return get_status(key)                     # keep serving the last good data
                     if simulate or not await asyncio.to_thread(sync.has_stored_data, key):
@@ -426,10 +429,20 @@ async def refresh_state(key: str, creds: Optional[Creds] = None, trigger: str = 
                     _record_sync(key, error)
                     if error is None:
                         await asyncio.to_thread(sync.save_snapshot, key, results)
+                        events = await asyncio.to_thread(alerts.process_results, key, results)
+                        if events:
+                            _spawn(alerts.dispatch(key, events))
                 print("  Pipeline complete.")
             finally:
                 state["refreshing"] = False
     return get_status(key)
+
+
+def _alert_sync_failure(key: str, error: str) -> None:
+    from app.services import alerts
+    ev = alerts.record_sync_failure(key, error)
+    if ev:
+        _spawn(alerts.dispatch(key, [ev]))
 
 
 async def _rebuild_from_db(key: str) -> None:

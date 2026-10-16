@@ -5,6 +5,7 @@ import {
   fetchActivityTrend, fetchWalletList, fetchStatus, refreshData,
   fetchWorkspace, connectBlockradar, disconnectBlockradar,
   fetchMembers, fetchInvites, createInvite, revokeInvite, changeRole, removeMember, fetchHistory,
+  fetchChannels, addChannel, toggleChannel, removeChannel, testChannel, fetchAlertEvents,
 } from '../api/client'
 
 export const useSummary       = () => useQuery({ queryKey: ['summary'],        queryFn: fetchSummary })
@@ -60,3 +61,16 @@ export const useCreateInvite = teamMutation(({ email, role, sendEmail }) => crea
 export const useRevokeInvite = teamMutation(revokeInvite)
 export const useChangeRole   = teamMutation(({ id, role }) => changeRole(id, role))
 export const useRemoveMember = teamMutation(removeMember)
+
+// ── Alerts
+export const useAlertEvents = () => useQuery({ queryKey: ['alert-events'], queryFn: fetchAlertEvents, refetchInterval: 60_000 })
+export const useChannels = enabled => useQuery({ queryKey: ['channels'], queryFn: fetchChannels, enabled })
+
+const channelMutation = fn => () => {
+  const qc = useQueryClient()
+  return useMutation({ mutationFn: fn, onSettled: () => qc.invalidateQueries({ queryKey: ['channels'] }) })
+}
+export const useAddChannel    = channelMutation(({ kind, target, label }) => addChannel(kind, target, label))
+export const useToggleChannel = channelMutation(({ id, enabled }) => toggleChannel(id, enabled))
+export const useRemoveChannel = channelMutation(removeChannel)
+export const useTestChannel   = channelMutation(testChannel)

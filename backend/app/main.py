@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.core.config import get_settings
 from app.api.routes import analytics, churn, wallets, auth, workspace
+from app.api.routes import alerts as alert_routes
 from app.services.auth import get_current_user
 import asyncio
 
@@ -68,6 +69,7 @@ app.include_router(analytics.router, prefix="/analytics", tags=["Analytics"], de
 app.include_router(churn.router,     prefix="/churn",     tags=["Churn"],     dependencies=_protected)
 app.include_router(wallets.router,   prefix="/wallets",   tags=["Wallets"],   dependencies=_protected)
 app.include_router(workspace.router, prefix="/workspace", tags=["Workspace"], dependencies=_protected)
+app.include_router(alert_routes.router, prefix="/workspace/alerts", tags=["Alerts"], dependencies=_protected)
 
 
 @app.get("/", tags=["Health"])

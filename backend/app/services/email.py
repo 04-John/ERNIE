@@ -105,3 +105,16 @@ def invite_email(link: str, workspace: str, inviter: str, role: str):
                    f"{escape(inviter)} invited you to join <b>{escape(workspace)}</b> as {'an admin' if role == 'admin' else 'a member'}. The link works once and expires in 7 days.",
                    "Accept invitation", link, "If you weren't expecting this invitation, you can ignore this email.")
     return f"You're invited to {workspace} on ERNIE", text, html
+
+
+def alert_email(workspace: str, lines: list, url: str, test: bool = False):
+    if test:
+        text = f"This is a test alert from ERNIE for {workspace}.\nYour email alerts are connected.\n\nOpen ERNIE: {url}"
+        html = _layout("Test alert", f"This is a test alert from ERNIE for <b>{escape(workspace)}</b>. Your email alerts are connected.", "Open ERNIE", url,
+                       "You're receiving this because you're a member of this workspace.")
+        return "ERNIE test alert", text, html
+    text = f"ERNIE alert for {workspace}\n\n" + "\n".join(lines) + f"\n\nOpen ERNIE: {url}"
+    items = "".join(f"<li style='margin:4px 0'>{escape(l.lstrip('• ').strip())}</li>" for l in lines)
+    html = _layout("Retention alert", f"<b>{escape(workspace)}</b><ul style='padding-left:18px;margin:10px 0 0'>{items}</ul>", "Open ERNIE", url,
+                   "You're receiving this because you're a member of this workspace and an admin enabled this alert channel.")
+    return f"ERNIE alert for {workspace}", text, html

@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Sun, Moon, RefreshCw, LogOut, Link2, Unplug, KeyRound, Loader2, UserPlus, Trash2, Copy, Check } from 'lucide-react'
+import { Sun, Moon, RefreshCw, LogOut, Link2, Unplug, KeyRound, Loader2, UserPlus, Trash2, Copy, Check, Mail, Hash, Webhook as WebhookIcon, Send, Bell, BellPlus } from 'lucide-react'
 import { PageHeader, Card, Badge, Alert } from '../components/ui'
 import {
   useStatus, useRefresh, useWorkspace, useConnect, useDisconnect,
   useMembers, useInvites, useCreateInvite, useRevokeInvite, useChangeRole, useRemoveMember,
+  useChannels, useAddChannel, useToggleChannel, useRemoveChannel, useTestChannel,
 } from '../hooks/useAnalytics'
 import { BASE_URL } from '../api/client'
 import { fmtNum, timeAgo, copyText } from '../lib/format'
@@ -244,6 +245,145 @@ function TeamCard({ emailEnabled }) {
   )
 }
 
+const CHANNEL_META = {
+  email:   { label: 'Email',   icon: Mail,        placeholder: '' },
+  slack:   { label: 'Slack',   icon: Hash,        placeholder: 'https://hooks.slack.com/services/…' },
+  webhook: { label: 'Webhook', icon: WebhookIcon, placeholder: 'https://your-server.com/ernie-alerts' },
+}
+
+function AddChannelForm({ members, onCreated }) {
+  const [kind, setKind] = useState('slack')
+  const [target, setTarget] = useState('')
+  const [label, setLabel] = useState('')
+  const add = useAddChannel()
+  const error = add.error?.response?.data?.detail || (add.isError ? 'Could not add the channel.' : '')
+
+  const submit = e => {
+    e.preventDefault()
+    add.mutate({ kind, target: target.trim(), label: label.trim() }, {
+      onSuccess: ch => { setTarget(''); setLabel(''); onCreated(ch) },
+    })
+  }
+
+  return (
+    <form className="form" onSubmit={submit}>
+      <div className="segmented" role="group" aria-label="Channel type" style={{ alignSelf: 'flex-start' }}>
+        {Object.entries(CHANNEL_META).map(([k, m]) => (
+          <button type="button" key={k} aria-pressed={kind === k} onClick={() => { setKind(k); setTarget('') }}><m.icon size={15} /> {m.label}</button>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div className="field" style={{ flex: '2 1 280px' }}>
+          <label htmlFor="ch-target">{kind === 'email' ? 'Send to' : kind === 'slack' ? 'Slack incoming-webhook URL' : 'Webhook URL (https)'}</label>
+          {kind === 'email' ? (
+            <select id="ch-target" className="input" value={target} onChange={e => setTarget(e.target.value)} required>
+              <option value="">Choose a teammate…</option>
+              {members.map(m => <option key={m.id} value={m.email}>{m.name ? `${m.name} (${m.email})` : m.email}</option>)}
+            </select>
+          ) : (
+            <input id="ch-target" className="input mono" value={target} onChange={e => setTarget(e.target.value)}
+              placeholder={CHANNEL_META[kind].placeholder} spellCheck={false} required />
+          )}
+        </div>
+        <div className="field" style={{ flex: '1 1 160px' }}>
+          <label htmlFor="ch-label">Name <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(optional)</span></label>
+          <input id="ch-label" className="input" value={label} onChange={e => setLabel(e.target.value)} placeholder="e.g. #retention" maxLength={60} />
+        </div>
+        <button type="submit" className="btn btn-primary" disabled={add.isPending || !target}><BellPlus size={15} /> Add channel</button>
+      </div>
+      {error && <Alert tone="danger">{error}</Alert>}
+    </form>
+  )
+}
+
+function ChannelRow({ ch }) {
+  const toggle = useToggleChannel()
+  const remove = useRemoveChannel()
+  const test = useTestChannel()
+  const [confirming, setConfirming] = useState(false)
+  const Icon = CHANNEL_META[ch.kind]?.icon || Bell
+  const status = ch.last_error ? { tone: 'danger', text: 'Failing' } : ch.last_sent_at ? { tone: 'success', text: 'Working' } : { tone: 'neutral', text: 'Not used yet' }
+  const testResult = test.data
+
+  return (
+    <div style={{ padding: '14px 16px', borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--border)', opacity: ch.enabled ? 1 : 0.65 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <span className="stat-icon tone-neutral" style={{ width: 36, height: 36, borderRadius: 10 }}><Icon size={17} /></span>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <div style={{ fontWeight: 600, fontSize: 14 }}>{ch.label} <Badge tone={status.tone} dot>{ch.enabled ? status.text : 'Paused'}</Badge></div>
+          <div className="hint mono" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{ch.hint}</div>
+        </div>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-2)' }}>
+          <input type="checkbox" checked={ch.enabled} onChange={e => toggle.mutate({ id: ch.id, enabled: e.target.checked })} /> On
+        </label>
+        <button className="btn btn-sm" onClick={() => test.mutate(ch.id)} disabled={test.isPending}>
+          {test.isPending ? <Loader2 size={14} className="spin" /> : <Send size={14} />} Send test
+        </button>
+        {!confirming ? (
+          <button className="btn btn-sm btn-ghost" onClick={() => setConfirming(true)} aria-label={`Remove ${ch.label}`}><Trash2 size={14} /></button>
+        ) : (
+          <span style={{ display: 'inline-flex', gap: 6 }}>
+            <button className="btn btn-sm btn-danger" onClick={() => remove.mutate(ch.id)}>Remove</button>
+            <button className="btn btn-sm" onClick={() => setConfirming(false)}>Cancel</button>
+          </span>
+        )}
+      </div>
+      {ch.last_error && <div style={{ marginTop: 10 }}><Alert tone="danger"><strong>Last delivery failed:</strong> {ch.last_error}</Alert></div>}
+      {testResult && !test.isPending && (
+        <div style={{ marginTop: 10 }}>
+          {testResult.ok ? <Alert tone="success">Test message sent.</Alert> : <Alert tone="danger"><strong>Test failed:</strong> {testResult.error}</Alert>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AlertsCard() {
+  const { data: ws } = useWorkspace()
+  const isAdmin = ws?.role === 'admin'
+  const { data } = useChannels(isAdmin)
+  const { data: members = [] } = useMembers()
+  const [created, setCreated] = useState(null)       // a new webhook's signing secret, shown once
+  const [copied, setCopied] = useState(false)
+  const channels = data?.data || []
+
+  const copySecret = async () => { if (await copyText(created.secret)) { setCopied(true); setTimeout(() => setCopied(false), 1800) } }
+
+  return (
+    <Card title="Alerts" subtitle="Get told when a fintech turns high risk or a sync fails"
+      chip={isAdmin ? `${channels.length} channel${channels.length === 1 ? '' : 's'}` : undefined}>
+      {!isAdmin ? <p className="hint">Only workspace admins can manage alert channels.</p> : (
+        <div style={{ display: 'grid', gap: 18 }}>
+          <p style={{ fontSize: 13.5, color: 'var(--text-2)' }}>
+            After each sync, ERNIE sends <strong>one digest</strong> per channel when a fintech newly becomes <strong>high risk</strong> (or recovers), or when your
+            Blockradar sync starts failing. The first sync only sets a baseline, and a fintech that flaps is alerted at most once a day.
+          </p>
+
+          {channels.length > 0 && <div style={{ display: 'grid', gap: 10 }}>{channels.map(c => <ChannelRow key={c.id} ch={c} />)}</div>}
+
+          {created?.secret && (
+            <Alert tone="success">
+              <div><strong>Webhook added.</strong> Copy the signing secret now; it can't be shown again. Verify each request with
+                {' '}<code>X-ERNIE-Signature: sha256=HMAC_SHA256(secret, raw_body)</code>.</div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                <input className="input mono" readOnly value={created.secret} onFocus={e => e.target.select()} style={{ flex: '1 1 260px', height: 38, fontSize: 12 }} aria-label="Signing secret" />
+                <button className="btn btn-sm" type="button" onClick={copySecret} style={{ height: 38 }}>{copied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy</>}</button>
+              </div>
+            </Alert>
+          )}
+
+          {channels.length < (data?.max || 10) && (
+            <div style={{ paddingTop: channels.length ? 18 : 0, borderTop: channels.length ? '1px solid var(--border)' : 'none' }}>
+              <div className="stat-label" style={{ marginBottom: 12 }}>Add a channel</div>
+              <AddChannelForm members={members} onCreated={setCreated} />
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  )
+}
+
 export default function SettingsPage({ user, theme, setTheme, onLogout }) {
   const { data: s } = useStatus()
   const { data: ws } = useWorkspace()
@@ -270,6 +410,8 @@ export default function SettingsPage({ user, theme, setTheme, onLogout }) {
       <ConnectionCard />
 
       <TeamCard emailEnabled={user?.email_enabled} />
+
+      <AlertsCard />
 
       <Card title="Data status" action={
         <button className="btn btn-sm" onClick={() => refresh.mutate()} disabled={busy || s?.data_source === 'simulated'}
