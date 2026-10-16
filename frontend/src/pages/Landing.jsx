@@ -66,16 +66,8 @@ function Preview() {
             <div className="lp-panel">
               <h4>Transaction volume</h4>
               <svg viewBox="0 0 420 120" width="100%" height="140" preserveAspectRatio="none">
-                <defs>
-                  <linearGradient id="lpFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#10D9A0" stopOpacity=".32" /><stop offset="100%" stopColor="#10D9A0" stopOpacity="0" />
-                  </linearGradient>
-                  <linearGradient id="lpLine" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor="#A3FF3C" /><stop offset="100%" stopColor="#10D9A0" />
-                  </linearGradient>
-                </defs>
-                <path d={`${line} L420 120 L0 120 Z`} fill="url(#lpFill)" />
-                <path d={line} fill="none" stroke="url(#lpLine)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+                <path d={`${line} L420 120 L0 120 Z`} fill="var(--accent-soft)" />
+                <path d={line} fill="none" stroke="var(--emerald)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
               </svg>
             </div>
             <div className="lp-panel">
