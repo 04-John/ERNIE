@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useGoogleLogin } from '@react-oauth/google'
 import { Eye, EyeOff, Radar, Activity, ShieldCheck, Sun, Moon } from 'lucide-react'
 import Logo from '../components/Logo'
+import Starfield from '../components/Starfield'
 import { googleAuth } from '../api/client'
 
 const GOOGLE_ENABLED = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID)
@@ -74,6 +75,7 @@ export default function AuthLayout({ title, lede, children, footer, theme, onTog
   return (
     <div className="auth">
       <aside className="auth-brand">
+        <Starfield />
         {brand(40, true)}
         <div>
           <h1 className="auth-headline">

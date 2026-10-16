@@ -8,6 +8,7 @@ import {
   fetchChannels, addChannel, toggleChannel, removeChannel, testChannel, fetchAlertEvents, fetchFintech,
   fetchInsights, dismissInsight, fetchForecast, fetchCohorts, fetchHealth,
   fetchAssistantStatus, setAssistantEnabled, fetchPlans, fetchBilling,
+  fetchDeveloper, createApiKey, revokeApiKey, fetchApiUsage,
   fetchAudit, fetchAdminOverview, fetchAdminWorkspaces, setWorkspacePlan, fetchPublicStatus,
 } from '../api/client'
 
@@ -110,3 +111,13 @@ export const useSetWorkspacePlan = () => {
   const qc = useQueryClient()
   return useMutation({ mutationFn: ({ id, plan }) => setWorkspacePlan(id, plan), onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-workspaces'] }); qc.invalidateQueries({ queryKey: ['admin-overview'] }) } })
 }
+
+// ── Developer console
+export const useDeveloper = () => useQuery({ queryKey: ['developer'], queryFn: fetchDeveloper, retry: false })
+export const useApiUsage  = () => useQuery({ queryKey: ['api-usage'], queryFn: fetchApiUsage, retry: false })
+const devMutation = fn => () => {
+  const qc = useQueryClient()
+  return useMutation({ mutationFn: fn, onSuccess: () => { qc.invalidateQueries({ queryKey: ['developer'] }); qc.invalidateQueries({ queryKey: ['api-usage'] }); qc.invalidateQueries({ queryKey: ['audit'] }) } })
+}
+export const useCreateApiKey = devMutation(({ name, mode }) => createApiKey(name, mode))
+export const useRevokeApiKey = devMutation(revokeApiKey)

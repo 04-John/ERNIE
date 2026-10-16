@@ -117,3 +117,10 @@ export const fetchAdminOverview   = () => api.get('/admin/overview').then(r => r
 export const fetchAdminWorkspaces = q => api.get('/admin/workspaces', { params: { q } }).then(r => r.data.data)
 export const setWorkspacePlan     = (id, plan) => api.patch(`/admin/workspaces/${id}/plan`, { plan }).then(r => r.data)
 export const fetchPublicStatus    = () => api.get('/status').then(r => r.data)
+
+// ── Developer console (API keys, credits, usage)
+export const fetchDeveloper  = () => api.get('/developer').then(r => r.data)
+export const createApiKey    = (name, mode) => api.post('/developer/keys', { name, mode }).then(r => r.data)
+export const revokeApiKey    = id => api.delete(`/developer/keys/${id}`).then(r => r.data)
+export const fetchApiUsage   = () => api.get('/developer/usage', { params: { days: 30 } }).then(r => r.data)
+export const startTopup      = usd => api.post('/developer/topup', { usd }).then(r => r.data)

@@ -6,8 +6,8 @@ import Dashboard from './pages/Dashboard'
 import Landing from './pages/Landing'
 import { ForgotPassword, ResetPassword, VerifyEmail } from './pages/PasswordPages'
 import { Terms, Privacy, Status } from './pages/PublicPages'
-import Logo from './components/Logo'
 import { getMe, TOKEN_KEY } from './api/client'
+import { hideSplash } from './lib/splash'
 
 const THEME_KEY = 'ernie_theme'
 
@@ -52,6 +52,8 @@ export default function App() {
     try { localStorage.setItem(THEME_KEY, theme) } catch { /* ignore */ }
   }, [theme])
 
+  useEffect(() => { if (view !== 'loading') hideSplash() }, [view])
+
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY)
     queryClient.clear()
@@ -81,16 +83,7 @@ export default function App() {
     getMe().then(setUser).catch(() => {})     // login responses are minimal; load the full profile (role, workspace, verified)
   }
 
-  if (view === 'loading') {
-    return (
-      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
-        <div style={{ display: 'grid', gap: 18, justifyItems: 'center' }}>
-          <Logo size={44} />
-          <div className="skeleton" style={{ width: 120, height: 4 }} />
-        </div>
-      </div>
-    )
-  }
+  if (view === 'loading') return null          // the splash from index.html stays up while the saved session is checked
 
   const toggleTheme = () => setTheme(t => (t === 'dark' ? 'light' : 'dark'))
   const PublicPage = PUBLIC_PAGES[page]

@@ -1,5 +1,6 @@
 import { Sun, Moon, ArrowLeft, CheckCircle2, AlertTriangle } from 'lucide-react'
 import Logo from '../components/Logo'
+import Starfield from '../components/Starfield'
 import { usePublicStatus } from '../hooks/useAnalytics'
 import { timeAgo } from '../lib/format'
 import './landing.css'
@@ -10,6 +11,7 @@ const CONTACT = import.meta.env.VITE_SUPPORT_EMAIL || ''
 function Shell({ title, subtitle, theme, onToggleTheme, children }) {
   return (
     <div className="lp">
+      <Starfield />
       <header className="lp-nav">
         <div className="lp-wrap">
           <a href="#/" onClick={() => { window.location.hash = '' }} aria-label="ERNIE home"><Logo size={34} /></a>

@@ -5,7 +5,7 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="ERNIE — Engagement & Retention Network Intelligence Engine. Wallet analytics, churn prediction and retention insights for on-chain businesses." />
-    <meta name="theme-color" content="#070A0E" />
+    <meta name="theme-color" content="#000000" />
     <meta property="og:title" content="ERNIE — Engagement & Retention Intelligence" />
     <meta property="og:description" content="Know which fintechs and wallets are going quiet before they churn." />
     <meta property="og:type" content="website" />
@@ -27,8 +27,39 @@
         } catch (e) {}
       })();
     </script>
+    <style>
+      /* Splash: paints before any JavaScript, so the first thing people see is the brand, not a blank page */
+      #splash { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; background: #000; color: #EAF0F6;
+        transition: opacity .45s ease, visibility .45s; }
+      [data-theme="light"] #splash { background: #E9ECEF; color: #0F1A26; }
+      #splash.done { opacity: 0; visibility: hidden; }
+      .sp-inner { display: grid; justify-items: center; gap: 22px; }
+      .sp-mark { width: 76px; height: 76px; overflow: visible; filter: drop-shadow(0 0 18px rgba(16,217,160,.35)); animation: sp-breathe 2.4s ease-in-out infinite; }
+      .sp-mark rect { transform-box: fill-box; transform-origin: left center; transform: scaleX(0); animation: sp-bar .7s cubic-bezier(.2,.8,.2,1) forwards; }
+      .sp-mark .b2 { animation-delay: .14s; } .sp-mark .b3 { animation-delay: .28s; }
+      .sp-word { font: 800 22px/1 Inter, system-ui, sans-serif; letter-spacing: -.03em; opacity: 0; animation: sp-fade .6s .55s ease forwards; }
+      .sp-line { width: 132px; height: 2px; border-radius: 2px; background: rgba(127,140,155,.22); overflow: hidden; opacity: 0; animation: sp-fade .4s .7s ease forwards; }
+      .sp-line i { display: block; width: 45%; height: 100%; border-radius: 2px; background: linear-gradient(90deg, #A3FF3C, #10D9A0); animation: sp-slide 1.25s .8s cubic-bezier(.65,0,.35,1) infinite; }
+      @keyframes sp-bar { to { transform: scaleX(1); } }
+      @keyframes sp-fade { to { opacity: 1; } }
+      @keyframes sp-slide { from { transform: translateX(-110%); } to { transform: translateX(240%); } }
+      @keyframes sp-breathe { 0%, 100% { filter: drop-shadow(0 0 12px rgba(16,217,160,.22)); } 50% { filter: drop-shadow(0 0 26px rgba(163,255,60,.42)); } }
+      @media (prefers-reduced-motion: reduce) { #splash *, #splash { animation-duration: .01s !important; animation-delay: 0s !important; transition: none !important; } .sp-line i { animation: none; width: 100%; } }
+    </style>
   </head>
   <body>
+    <div id="splash" aria-hidden="true">
+      <div class="sp-inner">
+        <svg class="sp-mark" viewBox="0 0 64 64" fill="none">
+          <defs><linearGradient id="spg" x1="10" y1="10" x2="54" y2="54" gradientUnits="userSpaceOnUse"><stop stop-color="#A3FF3C"/><stop offset="1" stop-color="#10D9A0"/></linearGradient></defs>
+          <rect class="b1" x="10" y="10" width="44" height="12" rx="6" fill="url(#spg)"/>
+          <rect class="b2" x="10" y="26" width="31" height="12" rx="6" fill="url(#spg)"/>
+          <rect class="b3" x="10" y="42" width="44" height="12" rx="6" fill="url(#spg)"/>
+        </svg>
+        <div class="sp-word">ERNIE</div>
+        <div class="sp-line"><i></i></div>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

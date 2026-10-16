@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.state import states
 from app.models.alerts import AlertChannel, AlertEvent, RiskState
+from app.models.apiaccess import ApiKey, ApiUsageDaily, CreditTransaction
 from app.models.audit import AuditEvent
 from app.models.auth_token import AuthToken
 from app.models.insights import InsightRecord
@@ -28,7 +29,7 @@ from app.services.sync import load_history
 from app.services.tenancy import mask_wallet_id
 
 ORG_TABLES = (StoredTransaction, StoredAddress, Snapshot, FintechDaily, InsightRecord, RiskState, AlertEvent,
-              AlertChannel, BlockradarConnection, Invite, AiUsage, AuditEvent)
+              AlertChannel, BlockradarConnection, Invite, AiUsage, AuditEvent, ApiKey, ApiUsageDaily, CreditTransaction)
 
 
 def _iso(dt) -> Optional[str]:
@@ -55,6 +56,11 @@ def export_workspace(db: Session, org: Organization) -> dict:
                      for r in db.query(InsightRecord).filter(InsightRecord.org_id == org.id)],
         "alert_history": [{"kind": e.kind, "title": e.title, "detail": e.detail, "at": _iso(e.created_at)}
                           for e in db.query(AlertEvent).filter(AlertEvent.org_id == org.id).order_by(AlertEvent.created_at.desc()).limit(1000)],
+        "api": {"credits": int(org.credits or 0),
+                "keys": [{"name": k.name, "prefix": k.prefix, "mode": k.mode, "created_at": _iso(k.created_at), "last_used_at": _iso(k.last_used_at),
+                          "revoked_at": _iso(k.revoked_at)} for k in db.query(ApiKey).filter(ApiKey.org_id == org.id)],
+                "credit_history": [{"credits": t.delta, "kind": t.kind, "note": t.note, "at": _iso(t.created_at)}
+                                   for t in db.query(CreditTransaction).filter(CreditTransaction.org_id == org.id).order_by(CreditTransaction.created_at.desc())]},
         "audit_log": audit.recent(db, org.id, 1000),
         "note": "Secrets (your Blockradar API key, webhook URLs and signing secrets, password hashes) are never included in an export.",
     }

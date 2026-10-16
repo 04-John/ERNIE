@@ -1,117 +1,256 @@
-import { useState } from 'react'
-import { Copy, Check } from 'lucide-react'
-import { PageHeader, Card, Alert } from '../components/ui'
+import { useEffect, useState } from 'react'
+import { Copy, Check, ArrowRight, BellRing, Database, LayoutDashboard, Send, Zap, ShieldCheck, FlaskConical } from 'lucide-react'
+import ApiConsole from '../components/ApiConsole'
+import { useDeveloper } from '../hooks/useAnalytics'
 import { BASE_URL } from '../api/client'
 import { copyText } from '../lib/format'
+import './developers.css'
 
-const GROUPS = [
-  { name: 'Analytics', endpoints: [
-    { m: 'GET',  p: '/analytics/summary',        d: 'Top-level KPIs',              ret: 'total_wallets, total_volume_usd, dormancy_rate, never_active_wallets, high_risk_fintechs' },
-    { m: 'GET',  p: '/analytics/monthly-volume', d: 'Monthly volume by region',    ret: 'month, region, volume, tx_count' },
-    { m: 'GET',  p: '/analytics/regional',       d: 'Per-region aggregates',       ret: 'region, fintechs, total_wallets, activation_rate, avg_churn_prob' },
-    { m: 'GET',  p: '/analytics/type-breakdown', d: 'Volume by fintech type',      ret: 'type, count, avg_volume_k, high_risk' },
-    { m: 'GET',  p: '/analytics/status',         d: 'Pipeline status',             ret: 'data_source, last_refreshed, last_error, refreshing' },
-    { m: 'GET',  p: '/analytics/history',        d: 'Daily metric snapshots',      params: 'days (≤800)', ret: 'day, dormancy_rate, active_wallets, high_risk, total_volume_usd' },
-    { m: 'POST', p: '/analytics/refresh',        d: 'Re-sync now (1 per 30s)',     ret: 'status object' },
-  ]},
-  { name: 'Workspace', endpoints: [
-    { m: 'GET',    p: '/workspace',            d: 'Workspace + connection summary',     ret: 'workspace, role, connection{connected, api_key_last4, last_synced_at}' },
-    { m: 'PUT',    p: '/workspace/connection', d: 'Connect Blockradar (admin only)',    params: 'api_key, wallet_id', ret: 'workspace summary + status. The key is verified, then stored encrypted and never returned' },
-    { m: 'DELETE', p: '/workspace/connection', d: 'Disconnect and clear cached data',   ret: 'workspace summary' },
-  ]},
-  { name: 'Intelligence', endpoints: [
-    { m: 'GET',  p: '/intelligence/insights',         d: 'Prioritised findings',           ret: 'key, severity, title, detail, action, fintech_ids, evidence' },
-    { m: 'POST', p: '/intelligence/insights/dismiss', d: 'Hide a finding until it changes', params: 'key', ret: 'dismissed' },
-    { m: 'GET',  p: '/intelligence/forecast',         d: '30-day volume forecast + anomalies', ret: 'forecast{history, forecast[{day, value, low, high}], next30, last30, change}, anomalies[]' },
-    { m: 'GET',  p: '/intelligence/cohorts',          d: 'Wallet cohorts by creation month', ret: 'month, wallets, activated_pct, active_pct' },
-    { m: 'GET',  p: '/intelligence/health',           d: 'Retention health score',         ret: 'score (0-100), grade, components[]' },
-  ]},
-  { name: 'Alerts', endpoints: [
-    { m: 'GET',    p: '/workspace/alerts/events',   d: 'Recent alert history (any member)',  ret: 'kind, fintech_name, title, detail, created_at' },
-    { m: 'GET',    p: '/workspace/alerts/channels', d: 'List alert channels (admin)',         ret: 'id, kind, label, hint, enabled, last_sent_at, last_error' },
-    { m: 'POST',   p: '/workspace/alerts/channels', d: 'Add email / Slack / webhook (admin)', params: 'kind, target, label', ret: 'channel (+ one-time webhook secret)' },
-    { m: 'PATCH',  p: '/workspace/alerts/channels/{id}',      d: 'Enable or disable (admin)', params: 'enabled', ret: 'channel' },
-    { m: 'POST',   p: '/workspace/alerts/channels/{id}/test', d: 'Send a test message (admin)', ret: 'ok, error' },
-    { m: 'DELETE', p: '/workspace/alerts/channels/{id}',      d: 'Remove a channel (admin)', ret: 'removed' },
-  ]},
-  { name: 'Churn', endpoints: [
-    { m: 'GET', p: '/churn/scores',       d: 'Churn scores',          params: 'limit (≤200), risk, region', ret: 'fintech_id, churn_probability, churn_risk, total_volume' },
-    { m: 'GET', p: '/churn/high-risk',    d: 'High-risk fintechs',    ret: 'count, data[]' },
-    { m: 'GET', p: '/churn/fintech/{id}', d: 'One fintech in depth', ret: 'fintech (+ score breakdown), wallets, weekly activity, recent_transactions, daily risk history' },
-    { m: 'GET', p: '/churn/distribution', d: 'Risk tier counts',      ret: 'High, Medium, Low, Unknown' },
-  ]},
-  { name: 'Wallets', endpoints: [
-    { m: 'GET', p: '/wallets/dormancy',       d: 'Dormancy stats',        params: 'region', ret: 'overall + by_region' },
-    { m: 'GET', p: '/wallets/activity',       d: 'Wallet list',           params: 'fintech_id, limit (≤1000)', ret: 'id, lastActive, neverActive, isDormant, balanceUsd' },
-    { m: 'GET', p: '/wallets/activity-trend', d: 'Daily activity',        params: 'days (≤90)', ret: 'day, transactions, active_wallets' },
-  ]},
+const SECTIONS = [
+  ['quickstart', 'Quickstart'], ['authentication', 'Authentication'], ['endpoints', 'Endpoints'],
+  ['pricing', 'Pricing and credits'], ['errors', 'Errors and limits'],
 ]
 
-function CopyButton({ text, label = 'Copy' }) {
-  const [done, setDone] = useState(false)
+const BUILD = [
+  { icon: BellRing, title: 'Alert on churn risk', text: 'Page your team in Slack or PagerDuty the moment a fintech turns high risk.' },
+  { icon: Database, title: 'Feed your CRM', text: 'Write each fintech\'s risk score and reasons onto its account record.' },
+  { icon: LayoutDashboard, title: 'Power your own dashboards', text: 'Pull health, insights and history into the BI tools you already use.' },
+  { icon: Send, title: 'Automate outreach', text: 'Trigger a check-in workflow when a fintech\'s activity drops.' },
+]
+
+const SAMPLES = {
+  cURL: `curl "${BASE_URL}/v1/fintechs?risk=High&limit=5" \\
+  -H "Authorization: Bearer $ERNIE_API_KEY"`,
+  Python: `import os, requests
+
+r = requests.get(
+    "${BASE_URL}/v1/fintechs",
+    params={"risk": "High", "limit": 5},
+    headers={"Authorization": f"Bearer {os.environ['ERNIE_API_KEY']}"},
+    timeout=30,
+)
+r.raise_for_status()
+for f in r.json()["data"]:
+    print(f["name"], f["risk_probability"])`,
+  JavaScript: `const res = await fetch("${BASE_URL}/v1/fintechs?risk=High&limit=5", {
+  headers: { Authorization: \`Bearer \${process.env.ERNIE_API_KEY}\` },
+})
+if (!res.ok) throw new Error((await res.json()).detail)
+const { data } = await res.json()
+for (const f of data) console.log(f.name, f.risk_probability)`,
+}
+
+const ENDPOINTS = [
+  { id: 'fintechs.list', path: '/v1/fintechs', desc: 'Your fintechs ranked by churn risk. Filter by risk or region and paginate.',
+    params: [['risk', 'High, Medium, Low or Unknown'], ['region', 'Exact region name'], ['limit', '1 to 100, default 50'], ['offset', 'Skip this many, default 0']],
+    sample: `{
+  "total": 12, "limit": 5, "offset": 0,
+  "data": [{
+    "id": "fin_01", "name": "OmniPay", "region": "West Africa", "type": "Payments",
+    "risk": "High", "risk_probability": 0.74,
+    "days_since_last_transaction": 41, "transactions": 1840,
+    "total_volume_usd": 508213.4,
+    "volume_last_3_months_usd": 51230.0, "volume_previous_3_months_usd": 214900.0,
+    "dormant_wallet_share": 0.38
+  }]
+}` },
+  { id: 'fintechs.get', path: '/v1/fintechs/{id}', desc: 'One fintech with the reasons behind its score, so you can show your team why it was flagged.',
+    params: [['id', 'The fintech id from the list']],
+    sample: `{
+  "id": "fin_01", "name": "OmniPay", "risk": "High", "risk_probability": 0.74,
+  "score_breakdown": [{
+    "signal": "Silence vs its usual rhythm", "weight": 0.4, "contribution": 0.31,
+    "detail": "Usually transacts every ~2 days; silent for 41 (20.5x its usual gap)"
+  }]
+}` },
+  { id: 'health', path: '/v1/health', desc: 'The retention health score (0 to 100) and what drives it.', params: [],
+    sample: `{
+  "score": 82, "grade": "Strong", "volume_change_28d": -0.04,
+  "components": [{ "name": "Wallet activation", "value": 100, "detail": "100% of wallets have transacted" }]
+}` },
+  { id: 'insights', path: '/v1/insights', desc: 'Current findings, most important first, each with a suggested next step.', params: [],
+    sample: `{
+  "data": [{
+    "severity": "critical", "kind": "volume_drop",
+    "title": "3 fintechs cut volume by half or more",
+    "detail": "FlowPay: $51.3k to $64 in 4 weeks.",
+    "suggested_next_step": "Ask what changed before they stop completely.",
+    "fintech_ids": ["fin_07"]
+  }]
+}` },
+  { id: 'history', path: '/v1/history', desc: 'Daily headline metrics for charts. Window is limited by your plan.',
+    params: [['days', '1 to 800, default 30 (capped by your plan)']],
+    sample: `{ "days": 30, "data": [{ "day": "2026-10-15", "active_wallets": 4120, "dormancy_rate": 0.31, "high_risk": 7, "total_volume_usd": 4210000 }] }` },
+  { id: 'usage', path: '/v1/usage', desc: 'Your key\'s mode, credit balance and the price list. Always free.', params: [],
+    sample: `{ "mode": "live", "credits_remaining": 9120, "pricing": { "credit_usd": 0.001, "endpoints": { "health": 2 } } }` },
+]
+
+const ERRORS = [
+  ['401', 'Missing, wrong or revoked API key.'],
+  ['402', 'Not enough credits for this call. Nothing was returned or charged. Add credits and retry.'],
+  ['404', 'That fintech does not exist in your workspace. Not billed.'],
+  ['409', 'A live key needs a connected Blockradar wallet. Use a test key to try the API on demo data.'],
+  ['422', 'A parameter is invalid. Not billed.'],
+  ['429', 'You hit the per-key rate limit. Wait for the Retry-After seconds.'],
+  ['503', 'Your data is still syncing. Retry shortly.'],
+]
+
+function CodeBlock({ samples }) {
+  const langs = Object.keys(samples)
+  const [lang, setLang] = useState(langs[0])
+  const [copied, setCopied] = useState(false)
+  const copy = async () => { if (await copyText(samples[lang])) { setCopied(true); setTimeout(() => setCopied(false), 1600) } }
   return (
-    <button className="btn btn-sm" onClick={async () => { if (await copyText(text)) { setDone(true); setTimeout(() => setDone(false), 1600) } }}>
-      {done ? <><Check size={14} /> Copied</> : <><Copy size={14} /> {label}</>}
-    </button>
+    <div className="dev-codeblock">
+      <div className="dev-codebar">
+        <div className="dev-langs" role="tablist">
+          {langs.length > 1 ? langs.map(l => <button key={l} role="tab" aria-selected={lang === l} onClick={() => setLang(l)}>{l}</button>) : <span>{langs[0]}</span>}
+        </div>
+        <button className="dev-copy" onClick={copy} aria-label="Copy code">{copied ? <><Check size={13} /> Copied</> : <><Copy size={13} /> Copy</>}</button>
+      </div>
+      <pre><code>{samples[lang]}</code></pre>
+    </div>
   )
 }
 
-const SNIPPET = `# 1. Get a token
-curl -X POST ${BASE_URL}/auth/login \\
-  -H "Content-Type: application/json" \\
-  -d '{"email":"you@company.com","password":"********"}'
-
-# 2. Call any endpoint with it
-curl ${BASE_URL}/analytics/summary \\
-  -H "Authorization: Bearer <access_token>"`
+function useScrollSpy(ids) {
+  const [active, setActive] = useState(ids[0])
+  useEffect(() => {
+    const obs = new IntersectionObserver(entries => {
+      const visible = entries.filter(e => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0]
+      if (visible) setActive(visible.target.id)
+    }, { rootMargin: '-15% 0px -70% 0px' })
+    ids.forEach(id => { const el = document.getElementById(id); if (el) obs.observe(el) })
+    return () => obs.disconnect()
+  }, [ids])
+  return active
+}
 
 export default function Developers() {
+  const { data: dev } = useDeveloper()
+  const active = useScrollSpy(SECTIONS.map(s => s[0]))
+  const costs = dev?.pricing?.endpoints
+  const go = id => e => { e.preventDefault(); document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
+
   return (
-    <div className="stack">
-      <PageHeader eyebrow="Developers" title="API reference">
-        Everything the dashboard shows is available over a REST API.
-      </PageHeader>
+    <div className="dev">
+      <header className="dev-hero">
+        <span className="eyebrow">Developers</span>
+        <h1>Programmatic access to <span>retention intelligence</span></h1>
+        <p>Pull risk scores, health, insights and history for your fintechs straight into your own systems. Prepaid credits, pay only for the calls you make, and a free test mode on demo data.</p>
+        <div className="dev-cta">
+          <a className="btn btn-primary" href="#console" onClick={go('console')}>Get an API key <ArrowRight size={16} /></a>
+          <a className="btn" href="#quickstart" onClick={go('quickstart')}>Read the docs</a>
+        </div>
+        <div className="dev-badges">
+          <span><Zap size={14} /> REST and JSON</span><span><FlaskConical size={14} /> Free test keys</span><span><ShieldCheck size={14} /> Keys stored hashed</span>
+        </div>
+      </header>
 
-      <div className="grid-2">
-        <Card title="Base URL" action={<CopyButton text={BASE_URL} />}>
-          <div className="code" style={{ whiteSpace: 'normal', wordBreak: 'break-all' }}>{BASE_URL}</div>
-          <p className="hint" style={{ marginTop: 10 }}>All endpoints below are relative to this URL.</p>
-        </Card>
-        <Card title="Authentication">
-          <p style={{ fontSize: 14, color: 'var(--text-2)' }}>
-            Every endpoint except <code>/auth/*</code> and <code>/health</code> needs an
-            <code> Authorization: Bearer &lt;token&gt;</code> header. Tokens last 24 hours.
-          </p>
-        </Card>
-      </div>
+      <section>
+        <h2 className="dev-h2">What do you want to build?</h2>
+        <div className="dev-build">
+          {BUILD.map(b => (
+            <div className="dev-card" key={b.title}>
+              <div className="dev-ico"><b.icon size={19} /></div>
+              <h3>{b.title}</h3><p>{b.text}</p>
+            </div>
+          ))}
+        </div>
+      </section>
 
-      <Card title="Quick start" action={<CopyButton text={SNIPPET} />}>
-        <pre className="code">{SNIPPET}</pre>
-      </Card>
+      <ApiConsole />
 
-      {GROUPS.map(g => (
-        <Card key={g.name} title={`${g.name} endpoints`} chip={`${g.endpoints.length}`}>
-          <div style={{ display: 'grid', gap: 10 }}>
-            {g.endpoints.map(e => (
-              <div className="endpoint" key={e.p}>
-                <div className="endpoint-top">
-                  <span className={`method ${e.m !== 'GET' ? 'post' : ''}`}>{e.m}</span>
-                  <code style={{ fontSize: 13, fontWeight: 600 }}>{e.p}</code>
-                  <span style={{ fontSize: 13, color: 'var(--muted)' }}>{e.d}</span>
+      <div className="dev-docs">
+        <nav className="dev-toc" aria-label="Documentation">
+          <span>On this page</span>
+          {SECTIONS.map(([id, label]) => <a key={id} href={`#${id}`} onClick={go(id)} aria-current={active === id ? 'true' : undefined}>{label}</a>)}
+        </nav>
+
+        <div className="dev-content">
+          <section id="quickstart">
+            <h2 className="dev-h2">Quickstart</h2>
+            <ol className="dev-steps">
+              <li><b>Create a test key</b> in the console above. Test keys return demo data for free, so you can build before you add credits.</li>
+              <li><b>Make a request.</b> Send the key as a bearer token:</li>
+            </ol>
+            <CodeBlock samples={SAMPLES} />
+            <ol className="dev-steps" start={3}>
+              <li><b>Go live.</b> Connect your Blockradar wallet in Settings, add credits, and create a live key. Same calls, your real data.</li>
+            </ol>
+            <p className="dev-note">Base URL: <code>{BASE_URL}</code></p>
+          </section>
+
+          <section id="authentication">
+            <h2 className="dev-h2">Authentication</h2>
+            <p>Send your key in the <code>Authorization</code> header on every request.</p>
+            <CodeBlock samples={{ HTTP: 'Authorization: Bearer ernie_live_xxxxxxxxxxxxxxxx' }} />
+            <ul className="dev-list">
+              <li><code>ernie_live_…</code> reads your own workspace data and spends credits.</li>
+              <li><code>ernie_test_…</code> reads a fixed demo dataset, is free, and has a lower rate limit.</li>
+              <li>Keep keys on your server. Never put one in a browser app or a public repository. If one leaks, revoke it in the console, which takes effect immediately.</li>
+              <li>Only a fingerprint of each key is stored, so we cannot show it again after you create it.</li>
+            </ul>
+          </section>
+
+          <section id="endpoints">
+            <h2 className="dev-h2">Endpoints</h2>
+            <p>All endpoints are <code>GET</code> and return JSON.</p>
+            {ENDPOINTS.map(e => (
+              <article className="dev-endpoint" key={e.id} id={`ep-${e.id.replace('.', '-')}`}>
+                <div className="dev-ep-head">
+                  <span className="method">GET</span><code className="dev-path">{e.path}</code>
+                  <span className="dev-cost">{e.id === 'usage' ? 'free' : `${costs?.[e.id] ?? '…'} credits`}</span>
                 </div>
-                <div className="endpoint-meta">
-                  {e.params && <span><b>Params</b> {e.params}</span>}
-                  <span><b>Returns</b> {e.ret}</span>
-                </div>
-              </div>
+                <p>{e.desc}</p>
+                {e.params.length > 0 && (
+                  <table className="dev-params"><tbody>{e.params.map(([n, d]) => <tr key={n}><td><code>{n}</code></td><td>{d}</td></tr>)}</tbody></table>
+                )}
+                <CodeBlock samples={{ 'Example response': e.sample }} />
+              </article>
             ))}
-          </div>
-        </Card>
-      ))}
+          </section>
 
-      <Alert tone="info">
-        <strong>Rate limits.</strong> Login and registration are limited to 10 attempts per minute per IP, and data refresh to one run every 30 seconds.
-      </Alert>
+          <section id="pricing">
+            <h2 className="dev-h2">Pricing and credits</h2>
+            <p>You buy credits in advance and each successful call spends a few. One credit is $0.001, so $10 is 10,000 credits. Larger top-ups include a bonus. Credits don't expire.</p>
+            <table className="dev-table">
+              <thead><tr><th>Endpoint</th><th>Credits per call</th><th>Cost per call</th></tr></thead>
+              <tbody>
+                {ENDPOINTS.filter(e => e.id !== 'usage').map(e => (
+                  <tr key={e.id}><td><code>{e.path}</code></td><td className="tnum">{costs?.[e.id] ?? '…'}</td><td className="tnum">{costs ? `$${(costs[e.id] * (dev.pricing.credit_usd)).toFixed(3)}` : '…'}</td></tr>
+                ))}
+                <tr><td><code>/v1/usage</code></td><td>0</td><td>free</td></tr>
+              </tbody>
+            </table>
+            {dev && (
+              <table className="dev-table">
+                <thead><tr><th>Top-up</th><th>Credits</th><th>Bonus</th></tr></thead>
+                <tbody>{dev.pricing.packs.map(p => <tr key={p.usd}><td className="tnum">${p.usd}</td><td className="tnum">{p.credits.toLocaleString()}</td><td>{Math.round((p.credits / (p.usd * 1000) - 1) * 100) || '—'}{p.credits > p.usd * 1000 ? '%' : ''}</td></tr>)}</tbody>
+              </table>
+            )}
+            <ul className="dev-list">
+              <li>You are only billed for calls that succeed. Errors, unknown ids and invalid parameters are free.</li>
+              <li>Every billed response includes <code>X-Credits-Charged</code> and <code>X-Credits-Remaining</code>.</li>
+              <li>If your balance can't cover a call you get a <code>402</code> and no data. Nothing goes negative.</li>
+              <li>Test keys never spend credits.</li>
+            </ul>
+          </section>
+
+          <section id="errors">
+            <h2 className="dev-h2">Errors and limits</h2>
+            <p>Errors return a JSON body with a human-readable <code>detail</code>.</p>
+            <table className="dev-table">
+              <thead><tr><th>Status</th><th>Meaning</th></tr></thead>
+              <tbody>{ERRORS.map(([c, m]) => <tr key={c}><td><code>{c}</code></td><td>{m}</td></tr>)}</tbody>
+            </table>
+            <ul className="dev-list">
+              <li>Rate limits are per key: {dev?.pricing?.rate_limits_per_minute?.live ?? 300} requests a minute for live keys and {dev?.pricing?.rate_limits_per_minute?.test ?? 30} for test keys.</li>
+              <li>Data refreshes on your workspace's sync schedule, not on every call, so polling faster than a few times an hour won't give you newer numbers.</li>
+            </ul>
+          </section>
+        </div>
+      </div>
     </div>
   )
 }

@@ -9,6 +9,8 @@ from app.api.routes import assistant as assistant_routes
 from app.api.routes import billing as billing_routes
 from app.api.routes import account as account_routes
 from app.api.routes import admin as admin_routes
+from app.api.routes import developer as developer_routes
+from app.api.routes import v1 as v1_routes
 from app.api.routes import status as status_routes
 from app.services.auth import get_current_user
 import asyncio
@@ -82,6 +84,9 @@ app.include_router(intel_routes.router, prefix="/intelligence", tags=["Intellige
 app.include_router(assistant_routes.router, prefix="/assistant", tags=["Assistant"], dependencies=_protected)
 # /plans is public and /webhook is signature-verified; the other billing routes check the user themselves
 app.include_router(billing_routes.router, prefix="/billing", tags=["Billing"])
+app.include_router(developer_routes.router, prefix="/developer", tags=["Developer"], dependencies=_protected)
+# the public API authenticates with an API key (not a login token) and bills per call
+app.include_router(v1_routes.router, prefix="/v1", tags=["Public API"])
 app.include_router(admin_routes.router, prefix="/admin", tags=["Admin"], dependencies=_protected)
 app.include_router(status_routes.router, tags=["Health"])
 

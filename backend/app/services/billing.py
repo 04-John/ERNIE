@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models.organization import Organization
-from app.services import plans, audit
+from app.services import plans, audit, apiaccess
 
 settings = get_settings()
 
@@ -27,6 +27,11 @@ def price_ids() -> dict:
 
 def enabled() -> bool:
     return bool(settings.stripe_secret_key) and all(price_ids().values())
+
+
+def payments_enabled() -> bool:
+    """One-off payments (API credit top-ups) only need the secret key, not the subscription prices."""
+    return bool(settings.stripe_secret_key)
 
 
 def webhook_enabled() -> bool:
@@ -63,6 +68,22 @@ def checkout_url(db: Session, org: Organization, plan: str, email: str) -> str:
     return session["url"]
 
 
+def topup_url(db: Session, org: Organization, pack: dict, email: str) -> str:
+    base = settings.public_app_url.rstrip("/")
+    session = stripe.checkout.Session.create(
+        mode="payment",
+        customer=_customer_id(db, org, email),
+        client_reference_id=org.id,
+        line_items=[{"price_data": {"currency": "usd", "unit_amount": pack["usd"] * 100,
+                                    "product_data": {"name": f"ERNIE API credits ({pack['credits']:,})"}}, "quantity": 1}],
+        metadata={"org_id": org.id, "kind": "credits", "credits": str(pack["credits"])},
+        success_url=f"{base}/#/developers?credits=success",
+        cancel_url=f"{base}/#/developers?credits=cancelled",
+        api_key=settings.stripe_secret_key,
+    )
+    return session["url"]
+
+
 def portal_url(org: Organization) -> str:
     session = stripe.billing_portal.Session.create(
         customer=org.stripe_customer_id, return_url=f"{settings.public_app_url.rstrip('/')}/#/settings", api_key=settings.stripe_secret_key)
@@ -89,13 +110,32 @@ def _find_org(db: Session, obj: dict) -> Optional[Organization]:
     return org
 
 
+def _apply_topup(db: Session, org: Organization, obj: dict) -> str:
+    """Credit a paid API top-up. The amount actually paid must match a real pack, and a replay credits nothing."""
+    meta = obj.get("metadata") or {}
+    if meta.get("kind") != "credits" or obj.get("payment_status") != "paid":
+        return "ignored"
+    pack = next((p for p in apiaccess.TOPUP_PACKS if p["usd"] * 100 == obj.get("amount_total")), None)
+    if pack is None or str(pack["credits"]) != meta.get("credits"):
+        print(f"[billing] top-up for {org.id} did not match a pack; not credited")
+        return "mismatch"
+    if not apiaccess.credit(db, org.id, pack["credits"], "topup", obj.get("id"), f"Top-up ${pack['usd']}"):
+        return "duplicate"
+    audit.record(db, org.id, "stripe", "credits.added", f"Added {pack['credits']:,} API credits (${pack['usd']})")
+    return f"topup:{pack['credits']}"
+
+
 def apply_event(db: Session, event) -> str:
     """Update the workspace a Stripe event is about. Returns a short note about what happened (for logs and tests)."""
     kind, obj = event["type"], event["data"]["object"]
 
     if kind == "checkout.session.completed":
         org = _find_org(db, obj)
-        if org is None or obj.get("mode") != "subscription":
+        if org is None:
+            return "ignored"
+        if obj.get("mode") == "payment":
+            return _apply_topup(db, org, obj)
+        if obj.get("mode") != "subscription":
             return "ignored"
         plan = (obj.get("metadata") or {}).get("plan")
         org.stripe_customer_id = obj.get("customer") or org.stripe_customer_id

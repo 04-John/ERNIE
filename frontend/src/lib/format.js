@@ -33,7 +33,7 @@ export const initials = (user) => {
 export const RISK_TONE = { High: 'danger', Medium: 'warn', Low: 'success', Unknown: 'neutral' }
 
 // Stable colour per region (regions are data-driven now, not a fixed list of 4)
-const REGION_PALETTE = ['#12B886', '#5FAEFF', '#FFB938', '#B38CFF', '#FF7AB6', '#4FD6E8', '#FF8A5C']
+const REGION_PALETTE = ['#10D9A0', '#5FAEFF', '#FFB938', '#B38CFF', '#FF7AB6', '#4FD6E8', '#FF8A5C']
 export const regionColor = name => {
   if (!name || name === 'Unassigned') return 'var(--muted)'
   let h = 0

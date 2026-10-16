@@ -34,8 +34,8 @@ class OrgCtx:
     role: str
 
 
-async def org_ctx(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> OrgCtx:
-    org_id = user.org_id or ""
+async def load_workspace(db: Session, org_id: str, role: str = "member") -> OrgCtx:
+    """The data a workspace may see: its own once Blockradar is connected, otherwise the shared demo dataset."""
     key, creds, connected = DEMO_KEY, None, False
 
     if settings.data_mode != "simulated":
@@ -49,10 +49,14 @@ async def org_ctx(user: User = Depends(get_current_user), db: Session = Depends(
                 # encryption key changed: surface it, don't crash or leak demo data as real
                 st = states.setdefault(org_id, empty_state())
                 st.update(data_source="error", last_error="Saved Blockradar credentials can't be read. Reconnect in Settings.")
-                return OrgCtx(key=key, state=st, creds=None, connected=True, org_id=org_id, role=user.role)
+                return OrgCtx(key=key, state=st, creds=None, connected=True, org_id=org_id, role=role)
 
     state = await ensure_loaded(key, creds)
-    return OrgCtx(key=key, state=state, creds=creds, connected=connected, org_id=org_id, role=user.role)
+    return OrgCtx(key=key, state=state, creds=creds, connected=connected, org_id=org_id, role=role)
+
+
+async def org_ctx(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> OrgCtx:
+    return await load_workspace(db, user.org_id or "", user.role)
 
 
 def require_admin(user: User = Depends(get_current_user)) -> User:

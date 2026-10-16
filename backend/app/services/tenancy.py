@@ -187,6 +187,9 @@ def run_migrations(db: Session) -> None:
         if "plan" not in ocols:
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE organizations ADD COLUMN plan VARCHAR NOT NULL DEFAULT 'free'"))
+        if "credits" not in ocols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE organizations ADD COLUMN credits INTEGER NOT NULL DEFAULT 0"))
         for col in ("stripe_customer_id", "stripe_subscription_id", "subscription_status"):
             if col not in ocols:
                 with engine.begin() as conn:

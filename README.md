@@ -102,6 +102,15 @@ Free, Pro and Business plans are defined in one file, `backend/app/services/plan
 
 Payments use Stripe Checkout and the Customer Portal, so card details never touch ERNIE. A workspace's plan changes **only** when a Stripe webhook with a valid signature arrives. To switch billing on: create two recurring monthly Prices, set `STRIPE_SECRET_KEY`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_BUSINESS`, add a webhook endpoint at `<API URL>/billing/webhook` for `checkout.session.completed` and `customer.subscription.created|updated|deleted`, and set `STRIPE_WEBHOOK_SECRET`. Without keys, ERNIE runs normally and everyone is on Free.
 
+### Public API (pay per call)
+
+Businesses can wire ERNIE into their own systems. In **Developers**, an admin creates API keys, adds prepaid credits through Stripe Checkout, and watches usage.
+
+- **Endpoints** (`/v1`, bearer key): `fintechs`, `fintechs/{id}`, `health`, `insights`, `history`, plus a free `usage`. Live keys (`ernie_live_...`) read the workspace's own data and spend credits; test keys (`ernie_test_...`) read the demo dataset for free.
+- **Pricing** lives in `backend/app/services/apiaccess.py`: one credit is $0.001, each endpoint costs a few credits, and bigger top-ups carry a bonus. Prices are a starting point meant to be tuned against real usage.
+- **Safety**: keys are stored hashed and shown once; spending is a single atomic update so concurrent calls can never overspend; only successful calls are billed; a replayed Stripe webhook can never credit twice; each key has its own rate limit.
+- **Top-ups** use the same Stripe webhook as plans (`checkout.session.completed`), so no extra Stripe setup is needed. Credits are prepaid usage credit: they are not withdrawable or transferable. Have a lawyer review the wording before launch.
+
 ### Running the business
 
 - **Admin console** (`#/admin`): every workspace with plan, members, sync health and AI usage, plus a plan override for comped or enterprise accounts. Set `PLATFORM_ADMIN_EMAILS`; the account must be verified (Google sign-in counts). Everyone else gets a 404.

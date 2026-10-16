@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, String, Text, Boolean, Integer, DateTime, ForeignKey
 from sqlalchemy.sql import func
 from app.core.database import Base
 import uuid
@@ -13,6 +13,7 @@ class Organization(Base):
     created_at = Column(DateTime, server_default=func.now())
     ai_enabled = Column(Boolean, nullable=False, default=False, server_default="0")   # opt-in to the AI assistant
     plan       = Column(String, nullable=False, default="free", server_default="free")
+    credits    = Column(Integer, nullable=False, default=0, server_default="0")        # prepaid API credits (1 credit = $0.001)
     stripe_customer_id     = Column(String, nullable=True, index=True)
     stripe_subscription_id = Column(String, nullable=True)
     subscription_status    = Column(String, nullable=True)      # as reported by Stripe: active, past_due, canceled, ...
