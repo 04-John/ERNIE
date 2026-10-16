@@ -21,6 +21,8 @@ from app.services.auth import (
     create_user, authenticate_user, update_last_login,
     MIN_PASSWORD_LENGTH,
 )
+from app.models.organization import Organization
+from app.services.tenancy import find_valid_invite, mark_invite_accepted
 
 settings = get_settings()
 
@@ -36,6 +38,7 @@ class RegisterRequest(BaseModel):
     password: str = Field(max_length=128)
     name:     Optional[str] = Field(default="", max_length=120)
     company:  Optional[str] = Field(default="", max_length=120)
+    invite_token: Optional[str] = Field(default=None, max_length=200)
 
 class LoginRequest(BaseModel):
     email:    str = Field(max_length=254)
@@ -43,6 +46,7 @@ class LoginRequest(BaseModel):
 
 class GoogleAuthRequest(BaseModel):
     access_token: str = Field(max_length=4096)  # Google OAuth access token from frontend
+    invite_token: Optional[str] = Field(default=None, max_length=200)
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -69,13 +73,26 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
             detail="Password must be at least 8 characters."
         )
 
+    # joining via invite: the invite decides the workspace and role, and may be bound to one email
+    invite = None
+    if req.invite_token:
+        invite = find_valid_invite(db, req.invite_token)
+        if not invite:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This invitation is invalid or has expired.")
+        if invite.email and invite.email != req.email.strip().lower():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This invitation was sent to a different email address.")
+
     user = create_user(
         db=db,
         email=req.email,
         name=req.name,
         company=req.company,
         password=req.password,
+        org_id=invite.org_id if invite else None,
+        role=invite.role if invite else "admin",
     )
+    if invite:
+        mark_invite_accepted(db, invite)
 
     token = create_access_token({"sub": user.id, "email": user.email})
     update_last_login(db, user)
@@ -189,7 +206,18 @@ async def google_auth(req: GoogleAuthRequest, db: Session = Depends(get_db)):
             user.is_verified = True
             db.commit()
         else:
-            user = create_user(db=db, email=email, name=name, google_id=google_id)
+            invite = find_valid_invite(db, req.invite_token) if req.invite_token else None
+            if req.invite_token and not invite:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This invitation is invalid or has expired.")
+            if invite and invite.email and invite.email != email.strip().lower():
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This invitation was sent to a different Google account.")
+            user = create_user(
+                db=db, email=email, name=name, google_id=google_id,
+                org_id=invite.org_id if invite else None,
+                role=invite.role if invite else "admin",
+            )
+            if invite:
+                mark_invite_accepted(db, invite)
 
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account disabled.")
@@ -227,3 +255,16 @@ def get_me(user: User = Depends(get_current_user), db: Session = Depends(get_db)
         "created_at": user.created_at.isoformat() if user.created_at else None,
         "last_login": user.last_login.isoformat() if user.last_login else None,
     }
+
+
+# ─────────────────────────────────────────────
+# INVITE PREVIEW (public: lets the signup page show who invited you)
+# ─────────────────────────────────────────────
+
+@router.get("/invite/{token}", dependencies=[Depends(rate_limit_auth)])
+def preview_invite(token: str, db: Session = Depends(get_db)):
+    invite = find_valid_invite(db, token)
+    if not invite:
+        raise HTTPException(status_code=404, detail="This invitation is invalid or has expired.")
+    org = db.query(Organization).filter(Organization.id == invite.org_id).first()
+    return {"workspace": org.name if org else "a workspace", "email": invite.email, "role": invite.role}

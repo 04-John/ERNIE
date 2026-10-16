@@ -25,3 +25,22 @@ class BlockradarConnection(Base):
     created_at     = Column(DateTime, server_default=func.now())
     last_synced_at = Column(DateTime, nullable=True)
     last_error     = Column(Text, nullable=True)
+
+
+class Invite(Base):
+    """
+    A one-time invitation to join a workspace. Only a SHA-256 hash of the token is stored,
+    so a database leak can't be used to join workspaces; the link is shown once at creation.
+    """
+    __tablename__ = "invites"
+
+    id          = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id      = Column(String, ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False)
+    token_hash  = Column(String, unique=True, index=True, nullable=False)
+    email       = Column(String, nullable=True)           # if set, only this address may accept
+    role        = Column(String, nullable=False, default="member")
+    created_by  = Column(String, nullable=True)
+    created_at  = Column(DateTime, server_default=func.now())
+    expires_at  = Column(DateTime, nullable=False)
+    accepted_at = Column(DateTime, nullable=True)
+    revoked_at  = Column(DateTime, nullable=True)

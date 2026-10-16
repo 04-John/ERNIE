@@ -91,10 +91,13 @@ def create_user(
     company: str = "",
     password: str = None,
     google_id: str = None,
+    org_id: Optional[str] = None,
+    role: str = "admin",
 ) -> User:
     email = email.strip().lower()
-    # every signup starts its own workspace and is its admin
-    org = create_org(db, default_org_name(name, company, email))
+    # a plain signup starts its own workspace (and is its admin); an invited one joins the inviter's
+    if org_id is None:
+        org_id = create_org(db, default_org_name(name, company, email)).id
     user = User(
         email=email,
         name=name,
@@ -102,8 +105,8 @@ def create_user(
         hashed_password=hash_password(password) if password else None,
         google_id=google_id,
         is_verified=True if google_id else False,
-        org_id=org.id,
-        role="admin",
+        org_id=org_id,
+        role=role,
     )
     db.add(user)
     db.commit()

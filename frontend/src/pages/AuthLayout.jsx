@@ -23,11 +23,11 @@ function GoogleIcon() {
   )
 }
 
-export function GoogleButton({ label, onAuthed, onError }) {
+export function GoogleButton({ label, onAuthed, onError, inviteToken }) {
   const login = useGoogleLogin({
     onSuccess: async tokenResponse => {
       try {
-        const data = await googleAuth(tokenResponse.access_token)
+        const data = await googleAuth(tokenResponse.access_token, inviteToken)
         onAuthed(data.user, data.access_token)
       } catch (err) {
         onError(err.response?.data?.detail || 'Google sign-in failed. Please try again.')

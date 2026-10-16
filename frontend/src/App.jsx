@@ -16,10 +16,13 @@ const initialTheme = () => {
   return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
 }
 
+// An invite link looks like https://site/?invite=TOKEN
+const INVITE_TOKEN = new URLSearchParams(window.location.search).get('invite') || ''
+
 export default function App() {
   const [theme, setTheme] = useState(initialTheme)
   // loading | login | signup | app. Only 'loading' if a saved token needs validating.
-  const [view, setView]   = useState(() => (localStorage.getItem(TOKEN_KEY) ? 'loading' : 'login'))
+  const [view, setView]   = useState(() => (localStorage.getItem(TOKEN_KEY) ? 'loading' : INVITE_TOKEN ? 'signup' : 'login'))
   const [user, setUser]   = useState(null)
   const queryClient = useQueryClient()
 
@@ -51,6 +54,7 @@ export default function App() {
 
   const handleAuthed = (userData, token) => {
     localStorage.setItem(TOKEN_KEY, token)
+    if (INVITE_TOKEN) window.history.replaceState({}, '', window.location.pathname + window.location.hash)
     setUser(userData)
     setView('app')
   }
@@ -68,7 +72,7 @@ export default function App() {
 
   const toggleTheme = () => setTheme(t => (t === 'dark' ? 'light' : 'dark'))
   if (view === 'login')  return <Login  onLogin={handleAuthed}  onSignup={() => setView('signup')} theme={theme} onToggleTheme={toggleTheme} />
-  if (view === 'signup') return <Signup onSignup={handleAuthed} onLogin={() => setView('login')} theme={theme} onToggleTheme={toggleTheme} />
+  if (view === 'signup') return <Signup onSignup={handleAuthed} onLogin={() => setView('login')} theme={theme} onToggleTheme={toggleTheme} inviteToken={INVITE_TOKEN} />
 
   return <Dashboard theme={theme} setTheme={setTheme} user={user} onLogout={logout} />
 }

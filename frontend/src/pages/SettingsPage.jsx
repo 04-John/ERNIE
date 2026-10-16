@@ -1,9 +1,12 @@
 import { useState } from 'react'
-import { Sun, Moon, RefreshCw, LogOut, Link2, Unplug, KeyRound, Loader2 } from 'lucide-react'
+import { Sun, Moon, RefreshCw, LogOut, Link2, Unplug, KeyRound, Loader2, UserPlus, Trash2, Copy, Check } from 'lucide-react'
 import { PageHeader, Card, Badge, Alert } from '../components/ui'
-import { useStatus, useRefresh, useWorkspace, useConnect, useDisconnect } from '../hooks/useAnalytics'
+import {
+  useStatus, useRefresh, useWorkspace, useConnect, useDisconnect,
+  useMembers, useInvites, useCreateInvite, useRevokeInvite, useChangeRole, useRemoveMember,
+} from '../hooks/useAnalytics'
 import { BASE_URL } from '../api/client'
-import { fmtNum, timeAgo } from '../lib/format'
+import { fmtNum, timeAgo, copyText } from '../lib/format'
 
 const SOURCE_LABEL = {
   real: { tone: 'success', text: 'Live Blockradar data' },
@@ -107,6 +110,133 @@ function ConnectionCard() {
   )
 }
 
+function InviteForm() {
+  const [email, setEmail] = useState('')
+  const [role, setRole] = useState('member')
+  const [created, setCreated] = useState(null)   // { link, email, expires_at } shown once
+  const [copied, setCopied] = useState(false)
+  const create = useCreateInvite()
+  const error = create.error?.response?.data?.detail || (create.isError ? 'Could not create the invite.' : '')
+
+  const submit = e => {
+    e.preventDefault()
+    create.mutate({ email: email.trim(), role }, {
+      onSuccess: inv => {
+        setCreated({ link: `${window.location.origin}/?invite=${inv.token}`, email: inv.email, expires_at: inv.expires_at })
+        setEmail(''); setCopied(false)
+      },
+    })
+  }
+  const copy = async () => { if (await copyText(created.link)) { setCopied(true); setTimeout(() => setCopied(false), 1800) } }
+
+  return (
+    <div style={{ display: 'grid', gap: 14 }}>
+      <form onSubmit={submit} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div className="field" style={{ flex: '1 1 240px' }}>
+          <label htmlFor="inv-email">Email <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(optional, locks the link to one person)</span></label>
+          <input id="inv-email" className="input" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="teammate@company.com" />
+        </div>
+        <div className="field">
+          <label htmlFor="inv-role">Role</label>
+          <select id="inv-role" className="input" value={role} onChange={e => setRole(e.target.value)} style={{ minWidth: 120 }}>
+            <option value="member">Member</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <button type="submit" className="btn btn-primary" disabled={create.isPending}><UserPlus size={15} /> Create invite link</button>
+      </form>
+      {error && <Alert tone="danger">{error}</Alert>}
+      {created && (
+        <Alert tone="success">
+          <div><strong>Invite link created.</strong> Copy it now; for security it can't be shown again. It works once and expires {new Date(created.expires_at).toLocaleDateString()}.</div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+            <input className="input mono" readOnly value={created.link} onFocus={e => e.target.select()} style={{ flex: '1 1 260px', height: 38, fontSize: 12 }} aria-label="Invite link" />
+            <button className="btn btn-sm" type="button" onClick={copy} style={{ height: 38 }}>{copied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy</>}</button>
+          </div>
+        </Alert>
+      )}
+    </div>
+  )
+}
+
+function TeamCard() {
+  const { data: ws } = useWorkspace()
+  const { data: members = [] } = useMembers()
+  const isAdmin = ws?.role === 'admin'
+  const { data: invites = [] } = useInvites(isAdmin)
+  const revoke = useRevokeInvite()
+  const setRole = useChangeRole()
+  const remove = useRemoveMember()
+  const [removing, setRemoving] = useState(null)
+  const actionError = setRole.error?.response?.data?.detail || remove.error?.response?.data?.detail
+
+  return (
+    <Card title="Team" subtitle="People in this workspace" chip={`${members.length} member${members.length === 1 ? '' : 's'}`}>
+      {actionError && <div style={{ marginBottom: 12 }}><Alert tone="danger">{actionError}</Alert></div>}
+      <div className="table-wrap">
+        <table className="table">
+          <thead><tr><th>Name</th><th>Role</th><th>Last sign-in</th>{isAdmin && <th />}</tr></thead>
+          <tbody>
+            {members.map(m => (
+              <tr key={m.id}>
+                <td>
+                  <div style={{ fontWeight: 600 }}>{m.name || m.email} {m.is_you && <span className="chip" style={{ marginLeft: 6 }}>You</span>}</div>
+                  <div className="hint">{m.email}</div>
+                </td>
+                <td>
+                  {isAdmin && !m.is_you ? (
+                    <select className="input" value={m.role} aria-label={`Role for ${m.email}`} style={{ height: 34, width: 120 }}
+                      onChange={e => setRole.mutate({ id: m.id, role: e.target.value })}>
+                      <option value="member">Member</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  ) : <Badge tone={m.role === 'admin' ? 'accent' : 'neutral'}>{m.role}</Badge>}
+                </td>
+                <td style={{ color: 'var(--text-2)' }}>{m.last_login ? timeAgo(m.last_login) : '—'}</td>
+                {isAdmin && (
+                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    {!m.is_you && (removing === m.id ? (
+                      <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                        <button className="btn btn-sm btn-danger" onClick={() => remove.mutate(m.id, { onSettled: () => setRemoving(null) })}>Remove</button>
+                        <button className="btn btn-sm" onClick={() => setRemoving(null)}>Cancel</button>
+                      </span>
+                    ) : <button className="btn btn-sm btn-ghost" onClick={() => setRemoving(m.id)} aria-label={`Remove ${m.email}`}><Trash2 size={14} /></button>)}
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {isAdmin ? (
+        <>
+          {invites.length > 0 && (
+            <div style={{ marginTop: 20 }}>
+              <div className="stat-label" style={{ marginBottom: 8 }}>Pending invites</div>
+              <div style={{ display: 'grid', gap: 8 }}>
+                {invites.map(i => (
+                  <div key={i.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)', flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: 180, fontSize: 13 }}>
+                      <strong>{i.email || 'Anyone with the link'}</strong>
+                      <span className="hint"> · {i.role} · expires {new Date(i.expires_at).toLocaleDateString()}</span>
+                    </div>
+                    <button className="btn btn-sm btn-danger" onClick={() => revoke.mutate(i.id)} disabled={revoke.isPending}>Revoke</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <div style={{ marginTop: 20, paddingTop: 18, borderTop: '1px solid var(--border)' }}>
+            <div className="stat-label" style={{ marginBottom: 12 }}>Invite a teammate</div>
+            <InviteForm />
+          </div>
+        </>
+      ) : <p className="hint" style={{ marginTop: 14 }}>Only workspace admins can invite or manage teammates.</p>}
+    </Card>
+  )
+}
+
 export default function SettingsPage({ user, theme, setTheme, onLogout }) {
   const { data: s } = useStatus()
   const { data: ws } = useWorkspace()
@@ -131,6 +261,8 @@ export default function SettingsPage({ user, theme, setTheme, onLogout }) {
       </Card>
 
       <ConnectionCard />
+
+      <TeamCard />
 
       <Card title="Data status" action={
         <button className="btn btn-sm" onClick={() => refresh.mutate()} disabled={busy || s?.data_source === 'simulated'}

@@ -1,18 +1,27 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Mail, User, Building2, ArrowRight, Loader2 } from 'lucide-react'
 import AuthLayout, { GoogleButton, PasswordField } from './AuthLayout'
 import { Alert } from '../components/ui'
-import { registerUser } from '../api/client'
+import { registerUser, previewInvite } from '../api/client'
 
 const MIN_PASSWORD = 8 // must match the backend rule
 
-export default function Signup({ onSignup, onLogin, theme, onToggleTheme }) {
+export default function Signup({ onSignup, onLogin, theme, onToggleTheme, inviteToken }) {
   const [name, setName]         = useState('')
   const [company, setCompany]   = useState('')
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
+  const [invite, setInvite]   = useState(null)   // { workspace, email, role } once the invite is verified
+  const [inviteError, setInviteError] = useState('')
+
+  useEffect(() => {
+    if (!inviteToken) return
+    previewInvite(inviteToken)
+      .then(inv => { setInvite(inv); if (inv.email) setEmail(inv.email) })
+      .catch(err => setInviteError(err.response?.data?.detail || 'This invitation is invalid or has expired.'))
+  }, [inviteToken])
 
   const submit = async e => {
     e.preventDefault()
@@ -20,7 +29,7 @@ export default function Signup({ onSignup, onLogin, theme, onToggleTheme }) {
     if (password.length < MIN_PASSWORD) { setError(`Password must be at least ${MIN_PASSWORD} characters.`); return }
     setLoading(true); setError('')
     try {
-      const data = await registerUser(email, password, name, company)
+      const data = await registerUser(email, password, name, company, inviteToken)
       onSignup(data.user, data.access_token)
     } catch (err) {
       const status = err.response?.status
@@ -39,12 +48,13 @@ export default function Signup({ onSignup, onLogin, theme, onToggleTheme }) {
   return (
     <AuthLayout
       theme={theme} onToggleTheme={onToggleTheme}
-      title="Create your account"
-      lede="Start tracking wallet activity and churn risk in minutes."
+      title={invite ? `Join ${invite.workspace}` : 'Create your account'}
+      lede={invite ? `You've been invited as ${invite.role === 'admin' ? 'an admin' : 'a member'}. Create your account to join.` : 'Start tracking wallet activity and churn risk in minutes.'}
       footer={<>Already have an account? <button className="link" onClick={onLogin}>Sign in</button></>}
     >
       <div className="form">
-        <GoogleButton label="Sign up with Google" onAuthed={onSignup} onError={setError} />
+        {inviteError && <Alert tone="danger">{inviteError} Ask your admin for a new invite link, or <button type="button" className="link" onClick={() => window.location.assign(window.location.pathname)}>start your own workspace</button>.</Alert>}
+        <GoogleButton label="Sign up with Google" onAuthed={onSignup} onError={setError} inviteToken={inviteToken} />
 
         <form className="form" onSubmit={submit} noValidate>
           <div className="field">
@@ -56,21 +66,23 @@ export default function Signup({ onSignup, onLogin, theme, onToggleTheme }) {
             </div>
           </div>
 
-          <div className="field">
-            <label htmlFor="company">Company <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(optional)</span></label>
-            <div className="input-wrap">
-              <Building2 size={16} className="lead" />
-              <input id="company" className="input has-lead" value={company} onChange={e => setCompany(e.target.value)}
-                placeholder="Acme Payments" autoComplete="organization" />
+          {!inviteToken && (
+            <div className="field">
+              <label htmlFor="company">Company <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(optional)</span></label>
+              <div className="input-wrap">
+                <Building2 size={16} className="lead" />
+                <input id="company" className="input has-lead" value={company} onChange={e => setCompany(e.target.value)}
+                  placeholder="Acme Payments" autoComplete="organization" />
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="field">
             <label htmlFor="email">Work email</label>
             <div className="input-wrap">
               <Mail size={16} className="lead" />
               <input id="email" className="input has-lead" type="email" value={email} onChange={e => setEmail(e.target.value)}
-                placeholder="you@company.com" autoComplete="email" required />
+                placeholder="you@company.com" autoComplete="email" required readOnly={Boolean(invite?.email)} />
             </div>
           </div>
 

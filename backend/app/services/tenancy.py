@@ -5,14 +5,17 @@ Workspaces (organizations), their Blockradar connections, and the startup
 migration that upgrades a single-tenant database to multi-tenant.
 """
 
-from typing import Optional
+import hashlib
+import secrets
+from datetime import datetime, timedelta, timezone
+from typing import Optional, Tuple
 
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.database import engine
-from app.models.organization import Organization, BlockradarConnection
+from app.models.organization import Organization, BlockradarConnection, Invite
 from app.models.user import User
 from app.services import crypto
 from app.services.blockradar import Creds, CredentialError
@@ -97,6 +100,61 @@ def seed_env_connection(db: Session, user: User) -> bool:
     save_connection(db, user.org_id, creds)
     print(f"  OK seeded Blockradar connection for {boot} from environment")
     return True
+
+
+# ─────────────────────────────────────────────
+# INVITES
+# ─────────────────────────────────────────────
+
+INVITE_TTL_DAYS = 7
+MAX_PENDING_INVITES = 20
+VALID_ROLES = ("admin", "member")
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)   # DB stores naive UTC
+
+
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def pending_invites(db: Session, org_id: str):
+    return (
+        db.query(Invite)
+        .filter(Invite.org_id == org_id, Invite.accepted_at.is_(None), Invite.revoked_at.is_(None), Invite.expires_at > _now())
+        .order_by(Invite.created_at.desc())
+        .all()
+    )
+
+
+def create_invite(db: Session, org_id: str, created_by: str, email: Optional[str], role: str) -> Tuple[Invite, str]:
+    """Returns (invite, plaintext_token). The token is not recoverable afterwards."""
+    token = secrets.token_urlsafe(32)
+    invite = Invite(
+        org_id=org_id, created_by=created_by, role=role,
+        email=email.strip().lower() if email else None,
+        token_hash=_hash_token(token),
+        expires_at=_now() + timedelta(days=INVITE_TTL_DAYS),
+    )
+    db.add(invite)
+    db.commit()
+    db.refresh(invite)
+    return invite, token
+
+
+def find_valid_invite(db: Session, token: str) -> Optional[Invite]:
+    if not token or len(token) > 200:
+        return None
+    inv = db.query(Invite).filter(Invite.token_hash == _hash_token(token)).first()
+    if not inv or inv.accepted_at or inv.revoked_at or inv.expires_at <= _now():
+        return None
+    return inv
+
+
+def mark_invite_accepted(db: Session, invite: Invite) -> None:
+    invite.accepted_at = _now()
+    db.commit()
 
 
 # ─────────────────────────────────────────────

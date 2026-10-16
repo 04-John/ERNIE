@@ -4,6 +4,7 @@ import {
   fetchChurnScores, fetchDistribution, fetchDormancy, fetchHighRisk,
   fetchActivityTrend, fetchWalletList, fetchStatus, refreshData,
   fetchWorkspace, connectBlockradar, disconnectBlockradar,
+  fetchMembers, fetchInvites, createInvite, revokeInvite, changeRole, removeMember,
 } from '../api/client'
 
 export const useSummary       = () => useQuery({ queryKey: ['summary'],        queryFn: fetchSummary })
@@ -41,3 +42,19 @@ export const useDisconnect = () => {
   const qc = useQueryClient()
   return useMutation({ mutationFn: disconnectBlockradar, onSuccess: () => qc.invalidateQueries() })
 }
+
+// ── Team
+export const useMembers = () => useQuery({ queryKey: ['members'], queryFn: fetchMembers })
+export const useInvites = enabled => useQuery({ queryKey: ['invites'], queryFn: fetchInvites, enabled })
+
+const teamMutation = fn => () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['members'] }); qc.invalidateQueries({ queryKey: ['invites'] }) },
+  })
+}
+export const useCreateInvite = teamMutation(({ email, role }) => createInvite(email, role))
+export const useRevokeInvite = teamMutation(revokeInvite)
+export const useChangeRole   = teamMutation(({ id, role }) => changeRole(id, role))
+export const useRemoveMember = teamMutation(removeMember)

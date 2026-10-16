@@ -31,8 +31,9 @@ api.interceptors.response.use(
 
 // ── Auth
 export const loginUser    = (email, password) => api.post('/auth/login', { email, password }).then(r => r.data)
-export const registerUser = (email, password, name, company) => api.post('/auth/register', { email, password, name, company }).then(r => r.data)
-export const googleAuth   = access_token => api.post('/auth/google', { access_token }).then(r => r.data)
+export const registerUser = (email, password, name, company, invite_token) => api.post('/auth/register', { email, password, name, company, invite_token }).then(r => r.data)
+export const googleAuth   = (access_token, invite_token) => api.post('/auth/google', { access_token, invite_token }).then(r => r.data)
+export const previewInvite = token => api.get(`/auth/invite/${encodeURIComponent(token)}`).then(r => r.data)
 export const getMe        = () => api.get('/auth/me').then(r => r.data)
 
 // ── Analytics
@@ -52,6 +53,14 @@ export const fetchDistribution = () => api.get('/churn/distribution').then(r => 
 export const fetchWorkspace      = () => api.get('/workspace').then(r => r.data)
 export const connectBlockradar   = (api_key, wallet_id) => api.put('/workspace/connection', { api_key, wallet_id }).then(r => r.data)
 export const disconnectBlockradar = () => api.delete('/workspace/connection').then(r => r.data)
+
+// ── Team
+export const fetchMembers  = () => api.get('/workspace/members').then(r => r.data.data)
+export const fetchInvites  = () => api.get('/workspace/invites').then(r => r.data.data)
+export const createInvite  = (email, role) => api.post('/workspace/invites', { email: email || null, role }).then(r => r.data)
+export const revokeInvite  = id => api.delete(`/workspace/invites/${id}`).then(r => r.data)
+export const changeRole    = (id, role) => api.patch(`/workspace/members/${id}`, { role }).then(r => r.data)
+export const removeMember  = id => api.delete(`/workspace/members/${id}`).then(r => r.data)
 
 // ── Wallets
 export const fetchDormancy      = () => api.get('/wallets/dormancy').then(r => r.data.data)
