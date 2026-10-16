@@ -30,7 +30,7 @@
   --nav-bg:         rgba(0,0,0,0.92);
 }
 
-/* Blockradar's EXACT green — lime/chartreuse */
+/* Brand green — lime/chartreuse */
 :root, [data-theme="dark"] {
   --green:          #8DFF1C;
   --green-hover:    #a0ff40;

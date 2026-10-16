@@ -488,7 +488,7 @@ function MainContent({ active }) {
       <div>
         <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em', color: '#000', padding: '4px 12px', borderRadius: 20, background: 'var(--green)', display: 'inline-block', marginBottom: 12 }}>API Access</span>
         <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.03em', textTransform: 'uppercase', lineHeight: 1.1, marginBottom: 8 }}>Developer<br />Integration</h1>
-        <p style={{ fontSize: 13, color: 'var(--text-secondary)', maxWidth: 480 }}>Connect your application to Blockradar Intelligence using the REST API.</p>
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', maxWidth: 480 }}>Connect your application to ERNIE using the REST API.</p>
       </div>
       {[
         { method: 'GET', path: '/analytics/summary',       desc: 'Top-level KPIs — volume, wallets, churn counts' },
@@ -522,7 +522,7 @@ function MainContent({ active }) {
       {[
         { label: 'API Base URL',     value: BASE_URL,    tag: 'Backend' },
         { label: 'Data Mode',        value: 'Simulated',                tag: 'Pipeline' },
-        { label: 'Database',         value: 'blockradar-intelligence',  tag: 'PostgreSQL' },
+        { label: 'Database',         value: 'ernie',  tag: 'PostgreSQL' },
         { label: 'Pipeline Schedule',value: 'Every 6 hours',            tag: 'Cron' },
       ].map(s => (
         <div key={s.label} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -547,7 +547,7 @@ function MainContent({ active }) {
           API Reference &<br />Integration Guide
         </h1>
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', maxWidth: 520 }}>
-          Everything you need to integrate Blockradar Intelligence into your fintech stack.
+          Everything you need to integrate ERNIE into your fintech stack.
         </p>
       </div>
 
@@ -667,7 +667,7 @@ cd frontend && npm install && npm run dev
           Wallet Analytics &<br />Retention Insights
         </h1>
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', maxWidth: 480, lineHeight: 1.6 }}>
-          Real-time churn prediction, wallet dormancy tracking, and transaction volume trends across Blockradar's fintech network.
+          Real-time churn prediction, wallet dormancy tracking, and transaction volume trends across your Blockradar-connected fintechs.
         </p>
       </div>
 

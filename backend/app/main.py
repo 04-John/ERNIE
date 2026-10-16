@@ -12,7 +12,7 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("=" * 55)
-    print("  BLOCKRADAR INTELLIGENCE API")
+    print("  ERNIE API")
     print("=" * 55)
     print(f"  Mode     : {settings.data_mode.upper()}")
     if settings.debug:
@@ -40,8 +40,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Blockradar Intelligence API",
-    description="Wallet analytics, churn prediction & retention insights.",
+    title="ERNIE API",
+    description="Engagement & Retention Network Intelligence Engine: wallet analytics, churn prediction & retention insights.",
     version="1.0.0",
     lifespan=lifespan,
     # interactive docs only in debug — they advertise every route
@@ -67,7 +67,7 @@ app.include_router(wallets.router,   prefix="/wallets",   tags=["Wallets"],   de
 
 @app.get("/", tags=["Health"])
 async def root():
-    return {"service": "Blockradar Intelligence API", "status": "running"}
+    return {"service": "ERNIE API", "status": "running"}
 
 @app.get("/health", tags=["Health"])
 async def health():

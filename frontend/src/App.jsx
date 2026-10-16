@@ -45,7 +45,7 @@ export default function App() {
       flexDirection: 'column', gap: 16,
     }}>
       <div style={{ width: 36, height: 36, borderRadius: 8, background: '#8DFF1C', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ fontWeight: 800, fontSize: 14, color: '#000' }}>BR</span>
+        <span style={{ fontWeight: 800, fontSize: 14, color: '#000' }}>E</span>
       </div>
       <div style={{ fontSize: 12, color: '#555', letterSpacing: '.1em', textTransform: 'uppercase' }}>Loading...</div>
     </div>

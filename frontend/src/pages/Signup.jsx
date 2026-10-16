@@ -121,7 +121,7 @@ export default function Signup({ onSignup, onLogin }) {
           }}>
             <Layers size={18} color="#000" strokeWidth={2.5} />
           </div>
-          <span style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.03em' }}>blockradar</span>
+          <span style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.03em' }}>ERNIE</span>
         </div>
 
         {/* Center content */}
@@ -179,7 +179,7 @@ export default function Signup({ onSignup, onLogin }) {
           position: 'relative', fontSize: 11,
           color: 'rgba(255,255,255,0.25)', letterSpacing: '.04em',
         }}>
-          BLOCKRADAR INTELLIGENCE · 2026
+          ERNIE · 2026
         </div>
       </div>
 

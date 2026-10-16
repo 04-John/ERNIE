@@ -80,7 +80,7 @@ export default function Login({ onLogin, onSignup }) {
           }}>
             <Layers size={18} color="#000" strokeWidth={2.5} />
           </div>
-          <span style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.03em' }}>blockradar</span>
+          <span style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.03em' }}>ERNIE</span>
         </div>
 
         {/* Center content */}
@@ -117,13 +117,13 @@ export default function Login({ onLogin, onSignup }) {
           </h2>
           <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.45)', marginTop: 14, lineHeight: 1.7, maxWidth: 380 }}>
             Real-time churn prediction, wallet dormancy tracking,
-            and transaction analytics across Blockradar's network.
+            and transaction analytics across your Blockradar-connected fintechs.
           </p>
         </div>
 
         {/* Bottom */}
         <div style={{ position: 'relative', fontSize: 11, color: 'rgba(255,255,255,0.25)', letterSpacing: '.04em' }}>
-          BLOCKRADAR INTELLIGENCE · 2026
+          ERNIE · 2026
         </div>
       </div>
 
