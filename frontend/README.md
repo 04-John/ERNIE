@@ -1,16 +1,25 @@
-# React + Vite
+# ERNIE frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React 19 + Vite + Recharts + TanStack Query.
 
-Currently, two official plugins are available:
+```bash
+npm install
+cp .env.example .env   # VITE_API_BASE_URL, VITE_GOOGLE_CLIENT_ID
+npm run dev            # http://localhost:5173
+npm run build
+```
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Design system
 
-## React Compiler
+All colours, radii and type live in `src/index.css` as CSS variables (dark by default,
+`[data-theme="light"]` overrides). Components use shared classes (`.card`, `.btn`, `.badge`,
+`.table`, ...) and the primitives in `src/components/ui.jsx`.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Adding the logo
 
-## Expanding the ESLint configuration
+- Replace `src/assets/brand/logo-mark.svg` (the square mark used in the sidebar, login and loading screen)
+- Replace `public/favicon.svg` (browser tab icon)
+- If the logo already includes the wordmark, pass `wordmark={false}` where `<Logo />` is used
+- Brand colours: edit `--lime`, `--emerald`, `--brand-grad` and `--accent*` in `src/index.css`
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Pages are lazy-loaded and routed with the URL hash (`#/analytics`), so refresh and the back button work.

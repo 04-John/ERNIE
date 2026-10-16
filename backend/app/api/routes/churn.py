@@ -72,5 +72,6 @@ async def get_risk_distribution():
             "High": dist.get("High", 0),
             "Medium": dist.get("Medium", 0),
             "Low": dist.get("Low", 0),
+            "Unknown": dist.get("Unknown", 0),
         }
     }

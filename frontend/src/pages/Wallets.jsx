@@ -1,154 +1,126 @@
-import { useDormancy, useActivityTrend } from '../hooks/useAnalytics'
-import { Card } from '../components/VolumeChart'
-import { Wallet, TrendingDown, Activity, Globe } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
+import { Wallet, Activity, PauseCircle, Hourglass, Inbox } from 'lucide-react'
+import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { useDormancy, useActivityTrend, useWalletList } from '../hooks/useAnalytics'
+import { PageHeader, StatCard, Card, Badge, Skeleton, EmptyState, ChartTooltip } from '../components/ui'
+import { fmtNum, fmtUsd, fmtPct, timeAgo } from '../lib/format'
+
+function walletState(w) {
+  if (w.neverActive) return { tone: 'neutral', label: 'Never active' }
+  if (w.isDormant)   return { tone: 'warn',    label: 'Dormant' }
+  return { tone: 'success', label: 'Active' }
+}
+
+function WalletTable() {
+  const { data, isLoading } = useWalletList({ limit: 25 })
+  if (isLoading) return <Skeleton height={300} />
+  const rows = data?.data || []
+
+  return (
+    <Card title="Wallets" subtitle="Individual addresses and their activity" chip={`${fmtNum(data?.total)} total`}>
+      {rows.length === 0 ? (
+        <EmptyState icon={Inbox} title="No wallets yet">Addresses created in your Blockradar wallet will appear here.</EmptyState>
+      ) : (
+        <>
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr><th>Name</th><th>Network</th><th>Status</th><th>Last activity</th><th className="num">Transactions</th><th className="num">Balance</th></tr>
+              </thead>
+              <tbody>
+                {rows.map(w => {
+                  const st = walletState(w)
+                  return (
+                    <tr key={w.id}>
+                      <td style={{ fontWeight: 600 }}>{w._fintechName || '—'}</td>
+                      <td style={{ color: 'var(--text-2)', textTransform: 'capitalize' }}>{w.network || '—'}</td>
+                      <td><Badge tone={st.tone} dot>{st.label}</Badge></td>
+                      <td style={{ color: 'var(--text-2)' }}>
+                        {w.neverActive ? <span className="hint">No transactions · created {w.daysSinceLastTx}d ago</span> : timeAgo(w.lastActive)}
+                      </td>
+                      <td className="num">{fmtNum(w.totalTransactions)}</td>
+                      <td className="num">{fmtUsd(w.balanceUsd)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          {data.total > rows.length && <p className="hint" style={{ marginTop: 14 }}>Showing the first {rows.length} of {fmtNum(data.total)} wallets.</p>}
+        </>
+      )}
+    </Card>
+  )
+}
 
 export default function Wallets() {
   const { data, isLoading } = useDormancy()
-  const { data: trendData = [] } = useActivityTrend()
-  const overall   = data?.overall   || {}
-  const byRegion  = data?.by_region || []
+  const { data: trend = [] } = useActivityTrend()
 
-  const total    = overall.total_wallets   || 0
-  const active   = overall.active_wallets  || 0
-  const dormant  = overall.dormant_wallets || 0
-  const neverActive = overall.never_active_wallets || 0
-  const dormRate = ((overall.dormancy_rate || 0) * 100).toFixed(1)
-  const actRate  = ((overall.activation_rate || 0) * 100).toFixed(1)
-
-  // chart data
-  const chartData = byRegion.map(r => ({
+  const o = data?.overall || {}
+  const regions = (data?.by_region || []).map(r => ({
     region: r.region,
-    Active:  +((r.activation_rate || 0) * 100).toFixed(1),
-    Dormant: +((r.dormancy_rate   || 0) * 100).toFixed(1),
-    Total:   r.total,
+    Active: r.total - r.dormant - (r.never_active || 0),
+    Dormant: r.dormant,
+    'Never active': r.never_active || 0,
   }))
-
-  const StatCard = ({ label, value, sub, color, icon: Icon }) => (
-    <div style={{
-      background: 'var(--bg-card)', border: '1px solid var(--border)',
-      borderRadius: 'var(--radius-lg)', padding: '20px 22px',
-      transition: 'border-color .2s, transform .2s',
-    }}
-      onMouseEnter={e => { e.currentTarget.style.borderColor = color; e.currentTarget.style.transform = 'translateY(-2px)' }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = 'none' }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-        <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--text-muted)' }}>{label}</span>
-        <div style={{ width: 30, height: 30, borderRadius: 8, background: `${color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', color }}>
-          <Icon size={15} strokeWidth={2} />
-        </div>
-      </div>
-      <div style={{ fontSize: 32, fontWeight: 800, color, letterSpacing: '-0.03em', lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>{sub}</div>
-    </div>
-  )
+  const hasTrend = trend.some(d => d.transactions > 0)
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, animation: 'fadeUp .4s ease both' }}>
-      {/* Header */}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-          <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em', color: '#000', padding: '4px 12px', borderRadius: 20, background: 'var(--green)' }}>
-            Wallet Management
-          </span>
-        </div>
-        <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.03em', textTransform: 'uppercase', lineHeight: 1.1, marginBottom: 8 }}>
-          Wallet Activation<br />& Dormancy
-        </h1>
-        <p style={{ fontSize: 13, color: 'var(--text-secondary)', maxWidth: 480 }}>
-          Track wallet activation rates, identify dormant wallets, and monitor activity across all regions.
-        </p>
+    <div className="stack">
+      <PageHeader eyebrow="Wallets" title="Wallet activity">
+        Activation, dormancy and day-to-day activity across every address.
+      </PageHeader>
+
+      <div className="grid-kpi">
+        <StatCard loading={isLoading} label="Total wallets"  value={fmtNum(o.total_wallets)} sub="All addresses" tone="info" icon={Wallet} />
+        <StatCard loading={isLoading} label="Active"  value={fmtNum(o.active_wallets)} sub={`${fmtPct(o.activation_rate)} activation · last 60 days`} tone="accent" icon={Activity} />
+        <StatCard loading={isLoading} label="Dormant" value={fmtNum(o.dormant_wallets)} sub={`${fmtPct(o.dormancy_rate)} · inactive 60+ days`} tone="warn" icon={PauseCircle} />
+        <StatCard loading={isLoading} label="Never active" value={fmtNum(o.never_active_wallets)} sub="No successful transactions" tone="neutral" icon={Hourglass} />
       </div>
 
-      {/* KPI row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
-        <StatCard label="Total Wallets"   value={total.toLocaleString()}   sub="Across all fintechs"       color="var(--blue)"  icon={Wallet} />
-        <StatCard label="Active Wallets"  value={active.toLocaleString()}  sub={`${actRate}% activation`}  color="var(--green)" icon={Activity} />
-        <StatCard label="Dormant Wallets" value={dormant.toLocaleString()} sub={neverActive ? `Inactive 60+ days · ${neverActive.toLocaleString()} never active` : "Inactive 60+ days"} color="var(--red)"   icon={TrendingDown} />
-        <StatCard label="Dormancy Rate"   value={`${dormRate}%`}           sub="Platform-wide average"     color="var(--amber)" icon={Globe} />
+      <div className="grid-2">
+        <Card title="Wallet status by region" subtitle="Number of wallets" chip="Stacked">
+          {regions.length === 0 ? <EmptyState title="No wallet data yet" /> : (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={regions} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                <XAxis dataKey="region" tick={{ fill: 'var(--muted)', fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: 'var(--muted)', fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={v => v.toLocaleString()} width={52} />
+                <Tooltip content={<ChartTooltip valueFormatter={fmtNum} />} cursor={{ fill: 'var(--surface-2)' }} />
+                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingTop: 10 }} />
+                <Bar dataKey="Active" stackId="a" fill="var(--emerald)" maxBarSize={48} />
+                <Bar dataKey="Dormant" stackId="a" fill="var(--warn)" maxBarSize={48} />
+                <Bar dataKey="Never active" stackId="a" fill="var(--border-strong)" radius={[6, 6, 0, 0]} maxBarSize={48} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </Card>
+
+        <Card title="Daily activity" subtitle="Successful transactions and active wallets" chip="Last 14 days">
+          {!hasTrend ? (
+            <EmptyState icon={Activity} title="No transactions in this period">Daily activity appears once wallets start transacting.</EmptyState>
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <AreaChart data={trend} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                <defs>
+                  <linearGradient id="actFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#10D9A0" stopOpacity={0.35} /><stop offset="100%" stopColor="#10D9A0" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                <XAxis dataKey="day" interval="preserveStartEnd" tick={{ fill: 'var(--muted)', fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: 'var(--muted)', fontSize: 12 }} axisLine={false} tickLine={false} allowDecimals={false} width={40} />
+                <Tooltip content={<ChartTooltip valueFormatter={fmtNum} />} cursor={{ stroke: 'var(--border-strong)' }} />
+                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingTop: 10 }} />
+                <Area type="monotone" dataKey="transactions" name="Transactions" stroke="#10D9A0" strokeWidth={2} fill="url(#actFill)" />
+                <Area type="monotone" dataKey="active_wallets" name="Active wallets" stroke="var(--info)" strokeWidth={2} fill="none" />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </Card>
       </div>
 
-      {/* Activation bar chart */}
-      <Card title="Activation vs Dormancy by Region" chip="% Share">
-        <ResponsiveContainer width="100%" height={240}>
-          <BarChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-            <XAxis dataKey="region" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tickFormatter={v => `${v}%`} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
-            <Tooltip
-              formatter={(v, n) => [`${v}%`, n]}
-              contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
-              labelStyle={{ color: 'var(--text-secondary)' }}
-            />
-            <Bar dataKey="Active"  fill="#8DFF1C"     radius={[4,4,0,0]} maxBarSize={48} />
-            <Bar dataKey="Dormant" fill="#ef444455"   radius={[4,4,0,0]} maxBarSize={48} />
-          </BarChart>
-        </ResponsiveContainer>
-      </Card>
-
-      {/* Activity trend */}
-      <Card title="Wallet Activity Trend" chip="14 days">
-        {trendData.every(d => !d.transactions) ? (
-          <div style={{ padding: 40, textAlign: 'center', fontSize: 13, color: 'var(--text-muted)' }}>No transactions in this period yet.</div>
-        ) : (
-        <ResponsiveContainer width="100%" height={200}>
-          <AreaChart data={trendData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-            <defs>
-              <linearGradient id="activeGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor="#8DFF1C" stopOpacity={0.15} />
-                <stop offset="95%" stopColor="#8DFF1C" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-            <XAxis dataKey="day" interval="preserveStartEnd" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => v.toLocaleString()} />
-            <Tooltip
-              contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
-              formatter={v => [v.toLocaleString(), '']}
-            />
-            <Area type="monotone" dataKey="active_wallets" stroke="#8DFF1C" strokeWidth={2} fill="url(#activeGrad)" dot={false} name="Active wallets" />
-          </AreaChart>
-        </ResponsiveContainer>
-        )}
-      </Card>
-
-      {/* Region table */}
-      <Card title="Wallet Breakdown by Region" chip="All regions">
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr>
-                {['Region','Total Wallets','Active','Dormant','Activation Rate','Dormancy Rate'].map(h => (
-                  <th key={h} style={{ textAlign: 'left', padding: '8px 14px', color: 'var(--text-muted)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.07em', borderBottom: '1px solid var(--border)', fontWeight: 500, whiteSpace: 'nowrap' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {byRegion.map(r => (
-                <tr key={r.region}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-card-hover)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                >
-                  <td style={{ padding: '12px 14px', fontWeight: 600 }}>{r.region}</td>
-                  <td style={{ padding: '12px 14px', fontVariantNumeric: 'tabular-nums' }}>{(r.total || 0).toLocaleString()}</td>
-                  <td style={{ padding: '12px 14px', color: 'var(--green)', fontVariantNumeric: 'tabular-nums' }}>{(r.total - r.dormant - (r.never_active || 0) || 0).toLocaleString()}</td>
-                  <td style={{ padding: '12px 14px', color: 'var(--red)', fontVariantNumeric: 'tabular-nums' }}>{(r.dormant || 0).toLocaleString()}</td>
-                  <td style={{ padding: '12px 14px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{ width: 60, height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${((r.activation_rate||0)*100).toFixed(0)}%`, background: 'var(--green)', borderRadius: 2 }} />
-                      </div>
-                      <span style={{ color: 'var(--green)', fontVariantNumeric: 'tabular-nums' }}>{((r.activation_rate||0)*100).toFixed(1)}%</span>
-                    </div>
-                  </td>
-                  <td style={{ padding: '12px 14px', color: 'var(--amber)', fontVariantNumeric: 'tabular-nums' }}>{((r.dormancy_rate||0)*100).toFixed(1)}%</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <WalletTable />
     </div>
   )
 }
