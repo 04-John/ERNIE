@@ -93,3 +93,9 @@ export const fetchAssistantStatus = () => api.get('/assistant/status').then(r =>
 export const setAssistantEnabled  = enabled => api.put('/assistant/settings', { enabled }).then(r => r.data)
 export const assistantChat        = messages => api.post('/assistant/chat', { messages }).then(r => r.data)
 export const draftOutreach        = (fintech_id, channel) => api.post('/assistant/draft-outreach', { fintech_id, channel }).then(r => r.data)
+
+// ── Billing
+export const fetchPlans        = () => api.get('/billing/plans').then(r => r.data.data)
+export const fetchBilling      = () => api.get('/billing').then(r => r.data)
+export const startCheckout     = plan => api.post('/billing/checkout', { plan }).then(r => r.data)
+export const openBillingPortal = () => api.post('/billing/portal').then(r => r.data)

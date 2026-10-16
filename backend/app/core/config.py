@@ -51,6 +51,12 @@ class Settings(BaseSettings):
     assistant_fallbacks: bool = True          # server-side refusal fallbacks (retried without if the API rejects them)
     ai_monthly_limit: int = 0                 # 0 = use each plan's allowance; >0 overrides it for every workspace
 
+    # Billing (Stripe). Leave the secret key empty and ERNIE simply has no paid checkout.
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_price_pro: str = ""                # Stripe Price ids (recurring, monthly) for each paid plan
+    stripe_price_business: str = ""
+
     # Auth
     google_client_id: str = ""
     # Comma-separated list of allowed browser origins

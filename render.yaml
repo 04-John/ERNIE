@@ -32,6 +32,15 @@ services:
       # Optional: enables the Ask ERNIE assistant (opt-in per workspace). Needs credit on the Anthropic account.
       - key: ANTHROPIC_API_KEY
         sync: false
+      # Optional: paid plans via Stripe. Webhook endpoint to register in Stripe: <API URL>/billing/webhook
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_PRO
+        sync: false
+      - key: STRIPE_PRICE_BUSINESS
+        sync: false
       # Optional: this account's workspace is auto-connected using the two BLOCKRADAR_* values below.
       # Everyone else connects their own wallet in Settings.
       - key: BOOTSTRAP_ADMIN_EMAIL

@@ -3,6 +3,7 @@ import {
   ArrowRight, Check, Sun, Moon,
 } from 'lucide-react'
 import Logo from '../components/Logo'
+import Pricing from '../components/Pricing'
 import './landing.css'
 
 const FEATURES = [
@@ -106,6 +107,7 @@ export default function Landing({ theme, onToggleTheme, onLogin, onSignup }) {
             <a onClick={go('features')}>Features</a>
             <a onClick={go('how')}>How it works</a>
             <a onClick={go('security')}>Security</a>
+            <a onClick={go('pricing')}>Pricing</a>
             <a onClick={go('faq')}>FAQ</a>
           </nav>
           <div className="lp-nav-actions">
@@ -192,7 +194,17 @@ export default function Landing({ theme, onToggleTheme, onLogin, onSignup }) {
           </div>
         </section>
 
-        <section className="lp-section alt" id="faq">
+        <section className="lp-section alt" id="pricing">
+          <div className="lp-wrap">
+            <div className="lp-head">
+              <h2>Simple pricing that grows with you</h2>
+              <p>Start free with one wallet. Upgrade when your team needs more.</p>
+            </div>
+            <Pricing onChoose={onSignup} ctaLabel={p => (p.price_usd ? `Start with ${p.name}` : 'Start free')} />
+          </div>
+        </section>
+
+        <section className="lp-section" id="faq">
           <div className="lp-wrap">
             <div className="lp-head"><h2>Frequently asked questions</h2></div>
             <div className="lp-faq">
@@ -229,6 +241,7 @@ export default function Landing({ theme, onToggleTheme, onLogin, onSignup }) {
           <nav aria-label="Footer">
             <a onClick={go('features')}>Features</a>
             <a onClick={go('security')}>Security</a>
+            <a onClick={go('pricing')}>Pricing</a>
             <a onClick={onLogin}>Sign in</a>
           </nav>
         </div>

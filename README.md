@@ -96,6 +96,12 @@ ERNIE is multi-tenant. Every signup creates its own **workspace** and becomes it
 - A real workspace never falls back to demo data: if a sync fails it keeps its last good data and shows the error.
 - `DATA_MODE=simulated` forces demo data for everyone (local development); `DATA_MODE=real` enables per-workspace connections.
 
+### Plans and billing
+
+Free, Pro and Business plans are defined in one file, `backend/app/services/plans.py` (prices and limits for team members, alert channels, AI messages and chart history). Limits are enforced on the server; hitting one returns HTTP 402 with an upgrade message.
+
+Payments use Stripe Checkout and the Customer Portal, so card details never touch ERNIE. A workspace's plan changes **only** when a Stripe webhook with a valid signature arrives. To switch billing on: create two recurring monthly Prices, set `STRIPE_SECRET_KEY`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_BUSINESS`, add a webhook endpoint at `<API URL>/billing/webhook` for `checkout.session.completed` and `customer.subscription.created|updated|deleted`, and set `STRIPE_WEBHOOK_SECRET`. Without keys, ERNIE runs normally and everyone is on Free.
+
 ### Ask ERNIE (AI assistant)
 
 An analyst chat and a "Draft outreach" button on each fintech page, grounded in the workspace's own scores and findings.

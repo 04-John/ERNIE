@@ -187,6 +187,10 @@ def run_migrations(db: Session) -> None:
         if "plan" not in ocols:
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE organizations ADD COLUMN plan VARCHAR NOT NULL DEFAULT 'free'"))
+        for col in ("stripe_customer_id", "stripe_subscription_id", "subscription_status"):
+            if col not in ocols:
+                with engine.begin() as conn:
+                    conn.execute(text(f"ALTER TABLE organizations ADD COLUMN {col} VARCHAR"))
 
     if "daily_snapshots" in insp.get_table_names():
         scols = {c["name"] for c in insp.get_columns("daily_snapshots")}

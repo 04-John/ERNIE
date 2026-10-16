@@ -32,7 +32,7 @@ const ALL = [...NAV, ...BOTTOM]
 
 // "#/analytics" -> { id: 'analytics' }   "#/fintech/abc" -> { id: 'fintech', param: 'abc' }
 const parseHash = () => {
-  const hash = window.location.hash.replace(/^#\/?/, '')
+  const hash = window.location.hash.replace(/^#\/?/, '').split('?')[0]
   const fin = hash.match(/^fintech\/(.+)$/)
   if (fin) return { id: 'fintech', param: decodeURIComponent(fin[1]) }
   return { id: ALL.some(n => n.id === hash) ? hash : 'overview', param: null }

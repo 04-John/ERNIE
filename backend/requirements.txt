@@ -27,3 +27,4 @@ cryptography==50.0.2
 
 # AI assistant
 anthropic==1.15.0
+stripe==16.0.0
