@@ -6,7 +6,7 @@ import { registerUser, previewInvite } from '../api/client'
 
 const MIN_PASSWORD = 8 // must match the backend rule
 
-export default function Signup({ onSignup, onLogin, theme, onToggleTheme, inviteToken }) {
+export default function Signup({ onSignup, onLogin, onHome, theme, onToggleTheme, inviteToken }) {
   const [name, setName]         = useState('')
   const [company, setCompany]   = useState('')
   const [email, setEmail]       = useState('')
@@ -47,7 +47,7 @@ export default function Signup({ onSignup, onLogin, theme, onToggleTheme, invite
 
   return (
     <AuthLayout
-      theme={theme} onToggleTheme={onToggleTheme}
+      theme={theme} onToggleTheme={onToggleTheme} onHome={onHome}
       title={invite ? `Join ${invite.workspace}` : 'Create your account'}
       lede={invite ? `You've been invited as ${invite.role === 'admin' ? 'an admin' : 'a member'}. Create your account to join.` : 'Start tracking wallet activity and churn risk in minutes.'}
       footer={<>Already have an account? <button className="link" onClick={onLogin}>Sign in</button></>}

@@ -4,7 +4,7 @@ import AuthLayout, { GoogleButton, PasswordField } from './AuthLayout'
 import { Alert } from '../components/ui'
 import { loginUser } from '../api/client'
 
-export default function Login({ onLogin, onSignup, theme, onToggleTheme }) {
+export default function Login({ onLogin, onSignup, onHome, theme, onToggleTheme }) {
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading]   = useState(false)
@@ -31,7 +31,7 @@ export default function Login({ onLogin, onSignup, theme, onToggleTheme }) {
 
   return (
     <AuthLayout
-      theme={theme} onToggleTheme={onToggleTheme}
+      theme={theme} onToggleTheme={onToggleTheme} onHome={onHome}
       title="Welcome back"
       lede="Sign in to your retention intelligence dashboard."
       footer={<>New to ERNIE? <button className="link" onClick={onSignup}>Create an account</button></>}

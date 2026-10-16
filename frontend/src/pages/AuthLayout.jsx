@@ -67,11 +67,14 @@ export function PasswordField({ id, value, onChange, autoComplete, hint }) {
   )
 }
 
-export default function AuthLayout({ title, lede, children, footer, theme, onToggleTheme }) {
+export default function AuthLayout({ title, lede, children, footer, theme, onToggleTheme, onHome }) {
+  const brand = (size, tagline) => (onHome
+    ? <button type="button" onClick={onHome} aria-label="Back to ERNIE home" style={{ display: 'inline-flex' }}><Logo size={size} tagline={tagline} /></button>
+    : <Logo size={size} tagline={tagline} />)
   return (
     <div className="auth">
       <aside className="auth-brand">
-        <Logo size={40} tagline />
+        {brand(40, true)}
         <div>
           <h1 className="auth-headline">
             Know who's going quiet<br /><span>before they churn.</span>
@@ -91,7 +94,7 @@ export default function AuthLayout({ title, lede, children, footer, theme, onTog
       <main className="auth-form-side">
         <div className="auth-card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} className="auth-mobile-logo">
-            <Logo size={36} />
+            {brand(36, false)}
           </div>
           <h2>{title}</h2>
           <p className="lede">{lede}</p>

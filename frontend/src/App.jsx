@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Dashboard from './pages/Dashboard'
+import Landing from './pages/Landing'
 import Logo from './components/Logo'
 import { getMe, TOKEN_KEY } from './api/client'
 
@@ -21,8 +22,8 @@ const INVITE_TOKEN = new URLSearchParams(window.location.search).get('invite') |
 
 export default function App() {
   const [theme, setTheme] = useState(initialTheme)
-  // loading | login | signup | app. Only 'loading' if a saved token needs validating.
-  const [view, setView]   = useState(() => (localStorage.getItem(TOKEN_KEY) ? 'loading' : INVITE_TOKEN ? 'signup' : 'login'))
+  // loading | landing | login | signup | app. Only 'loading' if a saved token needs validating.
+  const [view, setView]   = useState(() => (localStorage.getItem(TOKEN_KEY) ? 'loading' : INVITE_TOKEN ? 'signup' : 'landing'))
   const [user, setUser]   = useState(null)
   const queryClient = useQueryClient()
 
@@ -35,7 +36,7 @@ export default function App() {
     localStorage.removeItem(TOKEN_KEY)
     queryClient.clear()
     setUser(null)
-    setView('login')
+    setView('landing')
   }, [queryClient])
 
   // restore session
@@ -71,8 +72,10 @@ export default function App() {
   }
 
   const toggleTheme = () => setTheme(t => (t === 'dark' ? 'light' : 'dark'))
-  if (view === 'login')  return <Login  onLogin={handleAuthed}  onSignup={() => setView('signup')} theme={theme} onToggleTheme={toggleTheme} />
-  if (view === 'signup') return <Signup onSignup={handleAuthed} onLogin={() => setView('login')} theme={theme} onToggleTheme={toggleTheme} inviteToken={INVITE_TOKEN} />
+  const home = () => setView('landing')
+  if (view === 'landing') return <Landing theme={theme} onToggleTheme={toggleTheme} onLogin={() => setView('login')} onSignup={() => setView('signup')} />
+  if (view === 'login')  return <Login  onLogin={handleAuthed}  onSignup={() => setView('signup')} onHome={home} theme={theme} onToggleTheme={toggleTheme} />
+  if (view === 'signup') return <Signup onSignup={handleAuthed} onLogin={() => setView('login')} onHome={home} theme={theme} onToggleTheme={toggleTheme} inviteToken={INVITE_TOKEN} />
 
   return <Dashboard theme={theme} setTheme={setTheme} user={user} onLogout={logout} />
 }
