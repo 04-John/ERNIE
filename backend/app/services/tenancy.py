@@ -179,6 +179,12 @@ def run_migrations(db: Session) -> None:
                 conn.execute(text("ALTER TABLE users ADD COLUMN role VARCHAR NOT NULL DEFAULT 'admin'"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_users_org_id ON users (org_id)"))
 
+    if "daily_snapshots" in insp.get_table_names():
+        scols = {c["name"] for c in insp.get_columns("daily_snapshots")}
+        if "health_score" not in scols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE daily_snapshots ADD COLUMN health_score FLOAT"))
+
     if "blockradar_connections" in insp.get_table_names():
         ccols = {c["name"] for c in insp.get_columns("blockradar_connections")}
         if "last_full_sync_at" not in ccols:

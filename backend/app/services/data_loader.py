@@ -345,7 +345,19 @@ def _empty_results() -> dict:
         "churn_scores": [],
         "monthly_volume": [],
         "regional_summary": [],
+        **{k: v for k, v in empty_state().items() if k in ("insights", "forecast", "anomalies", "cohorts", "health")},
     }
+
+
+async def _analyze(key: str, results: dict, addresses: list, transactions: list, simulate: bool) -> dict:
+    """Insights, forecast, anomalies, cohorts and health score. Real workspaces also persist their insights."""
+    from app.services import intelligence, sync
+    history = [] if simulate else await asyncio.to_thread(sync.load_history, key, 60)
+    prior_high = set() if simulate else await asyncio.to_thread(sync.load_prior_high_ids, key)
+    extras = await asyncio.to_thread(intelligence.analyze, results, addresses, transactions, not simulate, history, prior_high)
+    if not simulate:
+        await asyncio.to_thread(sync.persist_insights, key, extras["insights"])
+    return extras
 
 
 def _record_sync(key: str, error: Optional[str]) -> None:
@@ -433,6 +445,7 @@ async def refresh_state(key: str, creds: Optional[Creds] = None, trigger: str = 
 
                 kwargs = {} if simulate else {"as_of": pd.Timestamp.now()}
                 results = await asyncio.to_thread(run_churn_pipeline, addresses, transactions, **kwargs)
+                results.update(await _analyze(key, results, addresses, transactions, simulate))
 
                 state.update(results)
                 state["raw"] = {"addresses": addresses, "transactions": transactions}
@@ -471,6 +484,7 @@ async def _rebuild_from_db(key: str) -> None:
 
     addresses, transactions = await asyncio.to_thread(_build_from_db, key)
     results = await asyncio.to_thread(run_churn_pipeline, addresses, transactions, as_of=pd.Timestamp.now())
+    results.update(await _analyze(key, results, addresses, transactions, False))
     with SessionLocal() as db:
         conn = db.query(BlockradarConnection).filter(BlockradarConnection.org_id == key).first()
         synced = conn.last_synced_at.replace(tzinfo=timezone.utc).isoformat() if conn and conn.last_synced_at else None

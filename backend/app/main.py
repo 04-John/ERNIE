@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from app.core.config import get_settings
 from app.api.routes import analytics, churn, wallets, auth, workspace
 from app.api.routes import alerts as alert_routes
+from app.api.routes import intelligence as intel_routes
 from app.services.auth import get_current_user
 import asyncio
 
@@ -70,6 +71,7 @@ app.include_router(churn.router,     prefix="/churn",     tags=["Churn"],     de
 app.include_router(wallets.router,   prefix="/wallets",   tags=["Wallets"],   dependencies=_protected)
 app.include_router(workspace.router, prefix="/workspace", tags=["Workspace"], dependencies=_protected)
 app.include_router(alert_routes.router, prefix="/workspace/alerts", tags=["Alerts"], dependencies=_protected)
+app.include_router(intel_routes.router, prefix="/intelligence", tags=["Intelligence"], dependencies=_protected)
 
 
 @app.get("/", tags=["Health"])

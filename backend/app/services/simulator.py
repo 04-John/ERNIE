@@ -92,7 +92,7 @@ def generate_addresses(n: int = 100_000) -> List[Dict]:
         # wallets right up to the end; fading ones stopped ~6-10 weeks ago; quiet ones months ago.
         profile = random.choices(["healthy", "fading", "quiet"], weights=[0.60, 0.22, 0.18])[0]
         idle_days = 0 if profile == "healthy" else random.randint(40, 75) if profile == "fading" else random.randint(130, 260)
-        latest_created = END_DATE - timedelta(days=30 + idle_days)
+        latest_created = END_DATE - timedelta(days=1 + idle_days)
 
         for _ in range(counts[fi]):
             created = _random_date(START_DATE, latest_created)

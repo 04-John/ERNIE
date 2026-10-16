@@ -45,6 +45,7 @@ class Snapshot(Base):
     medium_risk       = Column(Integer, nullable=False, default=0)
     low_risk          = Column(Integer, nullable=False, default=0)
     unscored          = Column(Integer, nullable=False, default=0)
+    health_score      = Column(Float, nullable=True)
 
 
 class FintechDaily(Base):

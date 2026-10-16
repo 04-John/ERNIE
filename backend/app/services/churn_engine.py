@@ -6,6 +6,7 @@ scores every fintech with a churn probability, and returns
 a ranked list with risk labels (High / Medium / Low).
 """
 
+import numpy as np
 import pandas as pd
 from datetime import datetime, timezone
 from typing import List, Dict
@@ -20,6 +21,25 @@ END_DATE = pd.Timestamp("2026-03-01")
 def _to_naive_utc(series: pd.Series) -> pd.Series:
     """Parse mixed tz-aware/naive timestamps into naive UTC (safe to compare)."""
     return pd.to_datetime(series, errors="coerce", utc=True).dt.tz_convert(None)
+
+
+def _cadence(success: pd.DataFrame) -> pd.DataFrame:
+    """
+    How often each fintech normally transacts: the gaps (in days) between its distinct active days.
+    `median_gap_days` is its usual rhythm; `typical_gap_days` is the 90th percentile, i.e. the upper end of
+    what is normal for it, so a bursty fintech isn't flagged for an ordinary pause.
+    """
+    rows = []
+    for fid, g in success.groupby("_fintechId"):
+        days = np.sort(g["createdAt"].dt.normalize().unique())
+        gaps = np.diff(days).astype("timedelta64[D]").astype(float) if len(days) > 1 else np.array([])
+        rows.append({
+            "fintech_id": fid,
+            "median_gap_days": float(np.median(gaps)) if len(gaps) else 0.0,
+            "typical_gap_days": float(np.percentile(gaps, 90)) if len(gaps) else 0.0,
+            "gap_count": int(len(gaps)),
+        })
+    return pd.DataFrame(rows, columns=["fintech_id", "median_gap_days", "typical_gap_days", "gap_count"])
 
 
 def build_features(
@@ -54,6 +74,9 @@ def build_features(
         wallet_stats["volume_trend"]       = 0.0
         wallet_stats["vol_recent_3m"]      = 0.0
         wallet_stats["vol_prior_3m"]       = 0.0
+        wallet_stats["median_gap_days"]    = 0.0
+        wallet_stats["typical_gap_days"]   = 0.0
+        wallet_stats["gap_count"]          = 0
         return wallet_stats
 
     tx_df = pd.DataFrame(transactions)
@@ -74,6 +97,9 @@ def build_features(
         wallet_stats["volume_trend"]       = 0.0
         wallet_stats["vol_recent_3m"]      = 0.0
         wallet_stats["vol_prior_3m"]       = 0.0
+        wallet_stats["median_gap_days"]    = 0.0
+        wallet_stats["typical_gap_days"]   = 0.0
+        wallet_stats["gap_count"]          = 0
         return wallet_stats
 
     tx_stats = success.groupby("_fintechId").agg(
@@ -105,10 +131,13 @@ def build_features(
         (trend["vol_prior_3m"] + 1)
     )
 
+    cadence = _cadence(success)
+
     features = (
         wallet_stats
         .merge(tx_stats[["fintech_id","total_tx","total_volume",
                           "avg_tx_size","days_since_last_tx"]], on="fintech_id", how="left")
+        .merge(cadence, on="fintech_id", how="left")
         .merge(trend[["fintech_id","volume_trend","vol_recent_3m","vol_prior_3m"]], on="fintech_id", how="left")
     )
     # fintechs with no successful transaction: "never transacted", not "transacted just now"
@@ -122,11 +151,14 @@ def build_features(
 # CHURN SCORING
 # ─────────────────────────────────────────────
 
-# Heuristic v2. Each signal is scaled to 0..1 on an ABSOLUTE scale (never relative to other
+# Heuristic v3. Each signal is scaled to 0..1 on an ABSOLUTE scale (never relative to other
 # fintechs), weighted, and summed. There are no real churn outcomes to train on yet, so this is
 # deliberately a transparent rule set whose every point can be explained to the user.
 WEIGHTS = {"recency": 0.35, "dormancy": 0.20, "trend": 0.25, "activity": 0.20}
-RECENCY_FULL_DAYS = 90        # silent for this long = maximum recency risk
+RECENCY_FULL_DAYS = 90        # fallback scale: silent this long = maximum recency risk
+MIN_GAPS_FOR_RHYTHM = 4       # need at least this many gaps between active days to know a fintech's rhythm
+RHYTHM_OK_RATIO = 2.0         # silence up to 2x its usual gap is normal...
+RHYTHM_FULL_RATIO = 8.0       # ...and 8x or more is maximum risk
 LOW_ACTIVITY_FULL = 5         # fewer successful transactions than this = maximum activity risk
 LOW_ACTIVITY_HALF = 20        # fewer than this = half
 HIGH_AT = 0.60
@@ -144,11 +176,28 @@ def _clamp01(x: float) -> float:
     return max(0.0, min(1.0, float(x)))
 
 
+def _rhythm(row):
+    """(ratio, typical_gap) of current silence to this fintech's own usual gap, or None if its rhythm is unknown."""
+    if int(row.get("gap_count", 0)) < MIN_GAPS_FOR_RHYTHM:
+        return None
+    typical = max(float(row.get("typical_gap_days", 0.0)), 1.0)
+    return float(row["days_since_last_tx"]) / typical, typical
+
+
+def _recency(row) -> float:
+    """Silence relative to the fintech's OWN rhythm when known, else on the fixed 90-day scale."""
+    r = _rhythm(row)
+    if r is None:
+        return _clamp01(float(row["days_since_last_tx"]) / RECENCY_FULL_DAYS)
+    ratio, _ = r
+    return _clamp01((ratio - RHYTHM_OK_RATIO) / (RHYTHM_FULL_RATIO - RHYTHM_OK_RATIO))
+
+
 def _components(row) -> Dict[str, float]:
     prior, recent = float(row["vol_prior_3m"]), float(row["vol_recent_3m"])
     n = int(row["total_tx"])
     return {
-        "recency":  _clamp01(float(row["days_since_last_tx"]) / RECENCY_FULL_DAYS),
+        "recency":  _recency(row),
         "dormancy": _clamp01(row["dormancy_rate"]),
         # only a drop counts, and only if there was an earlier period to compare against
         "trend":    0.0 if prior <= 0 else _clamp01((prior - recent) / prior),
@@ -159,15 +208,26 @@ def _components(row) -> Dict[str, float]:
 def _explain(comp: Dict[str, float], row) -> List[Dict]:
     prior, recent = float(row["vol_prior_3m"]), float(row["vol_recent_3m"])
     days, n = float(row["days_since_last_tx"]), int(row["total_tx"])
+    rhythm = _rhythm(row)
+    if rhythm:
+        ratio, _ = rhythm
+        usual = max(float(row.get("median_gap_days", 0.0)), 1.0)
+        recency_detail = (f"Usually transacts every ~{usual:.0f} day{'' if round(usual) == 1 else 's'}; "
+                          f"silent for {days:.0f} ({ratio:.1f}x its usual gap)")
+    else:
+        recency_detail = f"Last transaction {days:.0f} day{'' if round(days) == 1 else 's'} ago"
     details = {
-        "recency":  f"Last transaction {days:.0f} day{'' if round(days) == 1 else 's'} ago",
+        "recency":  recency_detail,
         "dormancy": f"{float(row['dormancy_rate']):.0%} of wallets inactive for {60}+ days",
         "trend":    "No earlier 3-month period to compare with yet" if prior <= 0
                     else f"Volume {(recent - prior) / prior:+.0%} vs the previous 3 months",
         "activity": f"{n} successful transaction{'' if n == 1 else 's'}",
     }
+    labels = dict(SIGNAL_LABELS)
+    if rhythm:
+        labels["recency"] = "Silence vs its usual rhythm"
     return [
-        {"key": k, "label": SIGNAL_LABELS[k], "weight": WEIGHTS[k], "value": round(comp[k], 4),
+        {"key": k, "label": labels[k], "weight": WEIGHTS[k], "value": round(comp[k], 4),
          "points": round(comp[k] * WEIGHTS[k], 4), "detail": details[k]}
         for k in WEIGHTS
     ]

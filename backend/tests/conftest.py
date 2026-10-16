@@ -72,6 +72,7 @@ class FakeBlockradar:
 
 def _demo_dataset():
     ds = make_dataset("demo", 7)
+    ds["txs"][0]["createdAt"] = "2025-08-01T00:00:00Z"   # one demo fintech went quiet ~200 days before the demo end date (2026-03-01)
     txs = data_loader.normalize_transactions(ds["txs"], {})
     return data_loader.normalize_addresses(ds["addresses"], txs), txs
 

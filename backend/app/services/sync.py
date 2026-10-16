@@ -23,6 +23,7 @@ from typing import Dict, List, Optional, Tuple
 from app.core.database import SessionLocal
 from app.models.organization import BlockradarConnection
 from app.models.stored import StoredAddress, StoredTransaction, Snapshot, FintechDaily
+from app.models.insights import InsightRecord
 from app.services.blockradar import BlockradarClient, Creds
 
 PAGE_SIZE = 100
@@ -263,6 +264,7 @@ def purge_org_data(org_id: str) -> None:
         db.query(StoredAddress).filter(StoredAddress.org_id == org_id).delete()
         db.query(Snapshot).filter(Snapshot.org_id == org_id).delete()
         db.query(FintechDaily).filter(FintechDaily.org_id == org_id).delete()
+        db.query(InsightRecord).filter(InsightRecord.org_id == org_id).delete()
         conn = db.query(BlockradarConnection).filter(BlockradarConnection.org_id == org_id).first()
         if conn:
             conn.last_full_sync_at = None
@@ -289,6 +291,7 @@ def save_snapshot(org_id: str, results: dict) -> None:
         dormancy_rate=float(s.get("dormancy_rate", 0.0)), total_volume_usd=float(s.get("total_volume_usd", 0.0)),
         transactions=int(s.get("total_transactions", 0)), fintechs=int(s.get("total_fintechs", 0)),
         high_risk=risk["High"], medium_risk=risk["Medium"], low_risk=risk["Low"], unscored=risk["Unknown"],
+        health_score=(results.get("health") or {}).get("score"),
     )
     with SessionLocal() as db:
         row = db.query(Snapshot).filter(Snapshot.org_id == org_id, Snapshot.day == today).first()
@@ -311,6 +314,7 @@ def load_history(org_id: str, days: int = 90) -> List[dict]:
             "dormant_wallets": r.dormant_wallets, "never_active": r.never_active, "dormancy_rate": r.dormancy_rate,
             "total_volume_usd": r.total_volume_usd, "transactions": r.transactions, "fintechs": r.fintechs,
             "high_risk": r.high_risk, "medium_risk": r.medium_risk, "low_risk": r.low_risk, "unscored": r.unscored,
+            "health_score": r.health_score,
         } for r in rows]
 
 
@@ -341,3 +345,67 @@ def load_fintech_history(org_id: str, fintech_id: str, days: int = 120) -> List[
                 .order_by(FintechDaily.day).all())
         return [{"day": r.day.isoformat(), "risk": r.risk, "probability": r.probability,
                  "volume": r.total_volume_usd, "transactions": r.transactions, "days_since_last_tx": r.days_since_last_tx} for r in rows]
+
+
+# ─────────────────────────────────────────────
+# INSIGHTS (persistence + dismissal)
+# ─────────────────────────────────────────────
+
+def load_prior_high_ids(org_id: str, min_age_days: int = 7, max_age_days: int = 30) -> set:
+    """Fintechs that were High risk between 7 and 30 days ago (used to spot recoveries)."""
+    today = datetime.now(timezone.utc).date()
+    with SessionLocal() as db:
+        rows = db.query(FintechDaily.fintech_id).filter(
+            FintechDaily.org_id == org_id, FintechDaily.risk == "High",
+            FintechDaily.day <= today - timedelta(days=min_age_days), FintechDaily.day >= today - timedelta(days=max_age_days),
+        ).distinct().all()
+    return {r[0] for r in rows}
+
+
+def persist_insights(org_id: str, insights: List[dict]) -> None:
+    """
+    Upsert the current findings. Anything previously active that is no longer detected is marked resolved.
+    A finding that comes back after being resolved starts a new episode (dismissal is cleared).
+    """
+    now = _now()
+    keys = {i["key"] for i in insights}
+    with SessionLocal() as db:
+        rows = {r.key: r for r in db.query(InsightRecord).filter(InsightRecord.org_id == org_id).all()}
+        for i in insights:
+            row = rows.get(i["key"])
+            fields = dict(kind=i["kind"], severity=i["severity"], title=i["title"], detail=i.get("detail"), action=i.get("action"),
+                          fintech_ids=json.dumps(i.get("fintech_ids") or []), evidence=json.dumps(i.get("evidence") or {}),
+                          priority=float(i.get("priority") or 0.0), last_seen=now)
+            if row is None:
+                db.add(InsightRecord(org_id=org_id, key=i["key"], first_seen=now, **fields))
+            else:
+                for k, v in fields.items():
+                    setattr(row, k, v)
+                if row.resolved_at is not None:          # it had cleared and is back: a new episode
+                    row.resolved_at, row.dismissed_at, row.first_seen = None, None, now
+        for key, row in rows.items():
+            if key not in keys and row.resolved_at is None:
+                row.resolved_at = now
+        db.commit()
+
+
+def load_active_insights(org_id: str) -> List[dict]:
+    with SessionLocal() as db:
+        rows = (db.query(InsightRecord)
+                .filter(InsightRecord.org_id == org_id, InsightRecord.resolved_at.is_(None), InsightRecord.dismissed_at.is_(None))
+                .order_by(InsightRecord.priority.desc()).all())
+        return [{
+            "key": r.key, "kind": r.kind, "severity": r.severity, "title": r.title, "detail": r.detail, "action": r.action,
+            "fintech_ids": json.loads(r.fintech_ids), "evidence": json.loads(r.evidence), "priority": r.priority,
+            "first_seen": r.first_seen.isoformat() + "Z", "dismissable": True,
+        } for r in rows]
+
+
+def dismiss_insight(org_id: str, key: str) -> bool:
+    with SessionLocal() as db:
+        row = db.query(InsightRecord).filter(InsightRecord.org_id == org_id, InsightRecord.key == key).first()
+        if not row:
+            return False
+        row.dismissed_at = _now()
+        db.commit()
+        return True
