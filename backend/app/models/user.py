@@ -17,6 +17,8 @@ class User(Base):
     is_verified  = Column(Boolean, default=False)
     created_at   = Column(DateTime, server_default=func.now())
     last_login   = Column(DateTime, nullable=True)
+    # sessions issued before this moment are rejected (set on password change/reset)
+    password_changed_at = Column(DateTime, nullable=True)
 
     # Multi-tenancy: each user belongs to one organization (workspace)
     org_id       = Column(String, ForeignKey("organizations.id"), index=True, nullable=True)

@@ -385,7 +385,7 @@ code, pre, .mono { font-family: var(--font-mono); }
 .link:hover { text-decoration: underline; }
 
 /* ── Brand lockup ── */
-.logo { display: inline-flex; align-items: center; gap: 11px; }
+.logo { display: inline-flex; align-items: center; gap: 11px; text-align: left; }
 .logo img { display: block; border-radius: 10px; }
 .logo-word { font-weight: 800; letter-spacing: -0.04em; line-height: 1; }
 .logo-tag { font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }

@@ -34,6 +34,10 @@ export const loginUser    = (email, password) => api.post('/auth/login', { email
 export const registerUser = (email, password, name, company, invite_token) => api.post('/auth/register', { email, password, name, company, invite_token }).then(r => r.data)
 export const googleAuth   = (access_token, invite_token) => api.post('/auth/google', { access_token, invite_token }).then(r => r.data)
 export const previewInvite = token => api.get(`/auth/invite/${encodeURIComponent(token)}`).then(r => r.data)
+export const forgotPassword = email => api.post('/auth/forgot-password', { email }).then(r => r.data)
+export const resetPassword  = (token, password) => api.post('/auth/reset-password', { token, password }).then(r => r.data)
+export const verifyEmail    = token => api.post('/auth/verify-email', { token }).then(r => r.data)
+export const resendVerification = () => api.post('/auth/resend-verification').then(r => r.data)
 export const getMe        = () => api.get('/auth/me').then(r => r.data)
 
 // ── Analytics
@@ -58,7 +62,7 @@ export const disconnectBlockradar = () => api.delete('/workspace/connection').th
 // ── Team
 export const fetchMembers  = () => api.get('/workspace/members').then(r => r.data.data)
 export const fetchInvites  = () => api.get('/workspace/invites').then(r => r.data.data)
-export const createInvite  = (email, role) => api.post('/workspace/invites', { email: email || null, role }).then(r => r.data)
+export const createInvite  = (email, role, send_email = false) => api.post('/workspace/invites', { email: email || null, role, send_email }).then(r => r.data)
 export const revokeInvite  = id => api.delete(`/workspace/invites/${id}`).then(r => r.data)
 export const changeRole    = (id, role) => api.patch(`/workspace/members/${id}`, { role }).then(r => r.data)
 export const removeMember  = id => api.delete(`/workspace/members/${id}`).then(r => r.data)

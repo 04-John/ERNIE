@@ -119,6 +119,7 @@ def fake(monkeypatch):
     states.clear()
     data_loader._locks.clear()
     auth_service._attempts.clear()
+    auth_service._key_attempts.clear()
     yield f
 
 
@@ -137,3 +138,22 @@ def register(client, name="Test User"):
     assert r.status_code == 200, r.text
     token = r.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+class Mailbox(list):
+    """Captures outgoing email. `enabled` toggles whether the server believes email is configured."""
+    enabled = True
+
+
+@pytest.fixture()
+def mailbox(monkeypatch):
+    from app.services import email as mailer
+    box = Mailbox()
+
+    async def capture(to, subject, text, html=None):
+        box.append({"to": to, "subject": subject, "text": text, "html": html})
+        return True
+
+    monkeypatch.setattr(mailer, "send_email", capture)
+    monkeypatch.setattr(mailer, "email_enabled", lambda: box.enabled)
+    return box

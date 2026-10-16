@@ -5,6 +5,8 @@ Password hashing (bcrypt), JWT creation/verification, user lookups,
 a FastAPI dependency that protects routes, and a tiny login rate limiter.
 """
 
+import hashlib
+import secrets
 import time
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
@@ -19,6 +21,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.user import User
+from app.models.auth_token import AuthToken
 from app.services.tenancy import create_org, default_org_name, seed_env_connection
 
 settings = get_settings()
@@ -57,7 +60,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     expire = datetime.now(timezone.utc) + (
         expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "iat": int(datetime.now(timezone.utc).timestamp())})
     return jwt.encode(to_encode, settings.secret_key, algorithm=ALGORITHM)
 
 
@@ -156,6 +159,11 @@ def get_current_user(
     user = get_user_by_id(db, payload["sub"])
     if not user or not user.is_active:
         raise unauthorized
+    # a password change/reset invalidates every session issued before it
+    if user.password_changed_at:
+        changed = int(user.password_changed_at.replace(tzinfo=timezone.utc).timestamp())
+        if int(payload.get("iat", 0)) < changed:
+            raise unauthorized
     return user
 
 
@@ -178,3 +186,89 @@ def rate_limit_auth(request: Request, limit: int = 10, window: int = 60) -> None
             detail="Too many attempts. Try again in a minute.",
         )
     q.append(now)
+
+
+# ─────────────────────────────────────────────
+# RATE LIMIT BY KEY (e.g. per email address, so one inbox can't be flooded)
+# ─────────────────────────────────────────────
+
+_key_attempts: dict = defaultdict(deque)
+
+
+def rate_limit_key(key: str, limit: int, window: int) -> bool:
+    """True if this attempt is allowed; records it. Single-process, in-memory."""
+    now = time.monotonic()
+    q = _key_attempts[key]
+    while q and now - q[0] > window:
+        q.popleft()
+    if len(q) >= limit:
+        return False
+    q.append(now)
+    return True
+
+
+# ─────────────────────────────────────────────
+# ONE-TIME EMAIL TOKENS (password reset / email verification)
+# ─────────────────────────────────────────────
+
+RESET_TTL = timedelta(hours=1)
+VERIFY_TTL = timedelta(hours=48)
+
+
+def _naive_now() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def issue_auth_token(db: Session, user: User, purpose: str) -> str:
+    """Create a one-time token (returned once, stored hashed). Older unused tokens of that purpose die."""
+    now = _naive_now()
+    db.query(AuthToken).filter(
+        AuthToken.user_id == user.id, AuthToken.purpose == purpose, AuthToken.used_at.is_(None)
+    ).update({"used_at": now})
+    token = secrets.token_urlsafe(32)
+    ttl = RESET_TTL if purpose == "reset" else VERIFY_TTL
+    db.add(AuthToken(user_id=user.id, purpose=purpose, token_hash=_hash_token(token), expires_at=now + ttl))
+    db.commit()
+    return token
+
+
+def consume_auth_token(db: Session, token: str, purpose: str) -> Optional[User]:
+    """Validate and burn a token atomically. Returns the user, or None if invalid/expired/used."""
+    if not token or len(token) > 200:
+        return None
+    row = db.query(AuthToken).filter(AuthToken.token_hash == _hash_token(token), AuthToken.purpose == purpose).first()
+    now = _naive_now()
+    if not row or row.used_at or row.expires_at <= now:
+        return None
+    burned = db.query(AuthToken).filter(AuthToken.id == row.id, AuthToken.used_at.is_(None)).update({"used_at": now})
+    db.commit()
+    if not burned:                       # lost a race with another request using the same token
+        return None
+    user = get_user_by_id(db, row.user_id)
+    return user if user and user.is_active else None
+
+
+def set_password(db: Session, user: User, password: str) -> None:
+    """Set a new password, end all existing sessions, and mark the email verified (the user proved control of it)."""
+    user.hashed_password = hash_password(password)
+    user.password_changed_at = _naive_now()
+    user.is_verified = True
+    db.commit()
+
+
+def link_google_account(db: Session, user: User, google_id: str) -> None:
+    """
+    Attach a Google identity to an existing account. Google has verified this email, so if the
+    account was created with a password but never verified, that password may belong to someone
+    else who registered the address first (account pre-hijacking). Drop it and end old sessions.
+    """
+    user.google_id = google_id
+    if not user.is_verified and user.hashed_password:
+        user.hashed_password = None
+        user.password_changed_at = _naive_now()
+    user.is_verified = True
+    db.commit()

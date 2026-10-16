@@ -7,7 +7,7 @@ POST /auth/google    — Google OAuth → JWT
 GET  /auth/me        — get current user from token
 """
 
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
@@ -20,7 +20,9 @@ from app.services.auth import (
     get_user_by_email, get_user_by_google_id,
     create_user, authenticate_user, update_last_login,
     MIN_PASSWORD_LENGTH,
+    rate_limit_key, issue_auth_token, consume_auth_token, set_password, link_google_account,
 )
+from app.services import email as mailer
 from app.models.organization import Organization
 from app.services.tenancy import find_valid_invite, mark_invite_accepted
 
@@ -39,6 +41,16 @@ class RegisterRequest(BaseModel):
     name:     Optional[str] = Field(default="", max_length=120)
     company:  Optional[str] = Field(default="", max_length=120)
     invite_token: Optional[str] = Field(default=None, max_length=200)
+
+class ForgotRequest(BaseModel):
+    email: EmailStr
+
+class ResetRequest(BaseModel):
+    token: str = Field(max_length=200)
+    password: str = Field(max_length=128)
+
+class TokenRequest(BaseModel):
+    token: str = Field(max_length=200)
 
 class LoginRequest(BaseModel):
     email:    str = Field(max_length=254)
@@ -59,7 +71,7 @@ class TokenResponse(BaseModel):
 # ─────────────────────────────────────────────
 
 @router.post("/register", response_model=TokenResponse, dependencies=[Depends(rate_limit_auth)])
-def register(req: RegisterRequest, db: Session = Depends(get_db)):
+def register(req: RegisterRequest, background: BackgroundTasks, db: Session = Depends(get_db)):
     # check if email already exists
     if get_user_by_email(db, req.email):
         raise HTTPException(
@@ -93,6 +105,10 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     )
     if invite:
         mark_invite_accepted(db, invite)
+
+    if mailer.email_enabled():
+        subject, text, html = mailer.verify_email(f"{settings.app_base_url}/?verify={issue_auth_token(db, user, 'verify')}")
+        background.add_task(mailer.send_email, user.email, subject, text, html)
 
     token = create_access_token({"sub": user.id, "email": user.email})
     update_last_login(db, user)
@@ -201,10 +217,8 @@ async def google_auth(req: GoogleAuthRequest, db: Session = Depends(get_db)):
     if not user:
         user = get_user_by_email(db, email)
         if user:
-            # existing email account — link Google (email is Google-verified)
-            user.google_id   = google_id
-            user.is_verified = True
-            db.commit()
+            # existing email account: link Google (email is Google-verified); see link_google_account()
+            link_google_account(db, user, google_id)
         else:
             invite = find_valid_invite(db, req.invite_token) if req.invite_token else None
             if req.invite_token and not invite:
@@ -246,6 +260,8 @@ def get_me(user: User = Depends(get_current_user), db: Session = Depends(get_db)
     from app.models.organization import Organization
     org = db.query(Organization).filter(Organization.id == user.org_id).first()
     return {
+        "is_verified":   user.is_verified,
+        "email_enabled": mailer.email_enabled(),
         "workspace":  org.name if org else None,
         "role":       user.role,
         "id":         user.id,
@@ -268,3 +284,61 @@ def preview_invite(token: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="This invitation is invalid or has expired.")
     org = db.query(Organization).filter(Organization.id == invite.org_id).first()
     return {"workspace": org.name if org else "a workspace", "email": invite.email, "role": invite.role}
+
+
+# ─────────────────────────────────────────────
+# PASSWORD RESET
+# ─────────────────────────────────────────────
+
+GENERIC_RESET_REPLY = {"message": "If an account exists for that email, a reset link is on its way."}
+
+
+@router.post("/forgot-password", dependencies=[Depends(rate_limit_auth)])
+def forgot_password(req: ForgotRequest, background: BackgroundTasks, db: Session = Depends(get_db)):
+    """Always answers the same way, so it can't be used to discover which emails have accounts."""
+    email = req.email.strip().lower()
+    user = get_user_by_email(db, email)
+    # at most 3 emails per address per hour, so a victim's inbox can't be flooded
+    if user and user.is_active and rate_limit_key(f"reset:{email}", 3, 3600):
+        link = f"{settings.app_base_url}/?reset={issue_auth_token(db, user, 'reset')}"
+        subject, text, html = mailer.reset_email(link)
+        background.add_task(mailer.send_email, user.email, subject, text, html)
+    return GENERIC_RESET_REPLY
+
+
+@router.post("/reset-password", dependencies=[Depends(rate_limit_auth)])
+def reset_password(req: ResetRequest, db: Session = Depends(get_db)):
+    if len(req.password) < MIN_PASSWORD_LENGTH:                      # checked first so a typo doesn't burn the link
+        raise HTTPException(status_code=400, detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters.")
+    user = consume_auth_token(db, req.token, "reset")
+    if not user:
+        raise HTTPException(status_code=400, detail="This reset link is invalid or has expired. Request a new one.")
+    set_password(db, user, req.password)
+    return {"message": "Password updated. You can sign in with it now."}
+
+
+# ─────────────────────────────────────────────
+# EMAIL VERIFICATION
+# ─────────────────────────────────────────────
+
+@router.post("/verify-email", dependencies=[Depends(rate_limit_auth)])
+def verify_email(req: TokenRequest, db: Session = Depends(get_db)):
+    user = consume_auth_token(db, req.token, "verify")
+    if not user:
+        raise HTTPException(status_code=400, detail="This confirmation link is invalid or has expired.")
+    user.is_verified = True
+    db.commit()
+    return {"message": "Email confirmed."}
+
+
+@router.post("/resend-verification")
+def resend_verification(background: BackgroundTasks, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if user.is_verified:
+        return {"sent": False, "message": "Your email is already confirmed."}
+    if not mailer.email_enabled():
+        return {"sent": False, "message": "Email isn't configured on this server."}
+    if not rate_limit_key(f"verify:{user.id}", 3, 3600):
+        raise HTTPException(status_code=429, detail="Too many requests. Try again later.")
+    subject, text, html = mailer.verify_email(f"{settings.app_base_url}/?verify={issue_auth_token(db, user, 'verify')}")
+    background.add_task(mailer.send_email, user.email, subject, text, html)
+    return {"sent": True, "message": "Confirmation email sent."}

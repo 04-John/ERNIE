@@ -41,6 +41,23 @@ services:
         sync: false
       - key: CORS_ORIGINS
         sync: false
+      # Email: set EMAIL_BACKEND=smtp plus the SMTP_* values to enable password reset, email confirmation and emailed invites.
+      - key: EMAIL_BACKEND
+        value: console
+      - key: PUBLIC_APP_URL        # the site URL, e.g. https://blockradar-web.onrender.com
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_SECURITY
+        value: starttls
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
 
   - type: web
     name: blockradar-web

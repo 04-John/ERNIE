@@ -34,6 +34,17 @@ class Settings(BaseSettings):
     # Warm the shared demo dataset in the background at startup
     warm_demo: bool = True
 
+    # Email (password reset, verification, invites). "console" = don't send (safe default).
+    email_backend: str = "console"          # "smtp" to send for real
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_security: str = "starttls"         # starttls | ssl | none
+    email_from: str = "ERNIE <no-reply@localhost>"
+    # Public URL of the web app; used to build links inside emails
+    public_app_url: str = "http://localhost:5173"
+
     # Auth
     google_client_id: str = ""
     # Comma-separated list of allowed browser origins
@@ -65,6 +76,10 @@ class Settings(BaseSettings):
                 self.database_url.replace("postgres://", "postgresql://", 1),
             )
         return self
+
+    @property
+    def app_base_url(self) -> str:
+        return self.public_app_url.rstrip("/")
 
     @property
     def cors_origin_list(self) -> List[str]:

@@ -8,7 +8,7 @@ DELETE /workspace/connection  — disconnect and drop cached data           [adm
 The API key is encrypted at rest and is never returned by any endpoint.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -23,6 +23,10 @@ from app.services.auth import get_current_user, rate_limit_auth
 from app.services.blockradar import Creds, CredentialError, verify_credentials
 from app.services.data_loader import refresh_state, drop_state, get_status
 from app.services.sync import purge_org_data
+from app.services import email as mailer
+from app.core.config import get_settings
+
+settings = get_settings()
 from app.services.tenancy import (
     get_connection, save_connection, delete_connection, mask_wallet_id,
     create_invite, pending_invites, VALID_ROLES, MAX_PENDING_INVITES,
@@ -89,6 +93,7 @@ def disconnect(user: User = Depends(require_admin), db: Session = Depends(get_db
 class InviteRequest(BaseModel):
     email: Optional[EmailStr] = None
     role: str = Field(default="member", max_length=16)
+    send_email: bool = False          # also email the link to `email` (needs email configured)
 
 
 class RoleRequest(BaseModel):
@@ -148,7 +153,7 @@ def list_invites(user: User = Depends(require_admin), db: Session = Depends(get_
 
 
 @router.post("/invites", dependencies=[Depends(rate_limit_auth)])
-def new_invite(req: InviteRequest, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+def new_invite(req: InviteRequest, background: BackgroundTasks, user: User = Depends(require_admin), db: Session = Depends(get_db)):
     if req.role not in VALID_ROLES:
         raise HTTPException(status_code=400, detail="Role must be 'admin' or 'member'.")
     if len(pending_invites(db, user.org_id)) >= MAX_PENDING_INVITES:
@@ -156,9 +161,16 @@ def new_invite(req: InviteRequest, user: User = Depends(require_admin), db: Sess
     if req.email and db.query(User).filter(User.email == req.email.strip().lower()).first():
         raise HTTPException(status_code=400, detail="That email already has an ERNIE account.")
     invite, token = create_invite(db, user.org_id, user.id, req.email, req.role)
+    emailed = False
+    if req.send_email and invite.email and mailer.email_enabled():
+        org = db.query(Organization).filter(Organization.id == user.org_id).first()
+        subject, text, html = mailer.invite_email(
+            f"{settings.app_base_url}/?invite={token}", org.name if org else "a workspace", user.name or user.email, invite.role)
+        background.add_task(mailer.send_email, invite.email, subject, text, html)
+        emailed = True
     # the token is returned ONCE, here; only its hash is stored
     return {"id": invite.id, "token": token, "email": invite.email, "role": invite.role,
-            "expires_at": invite.expires_at.isoformat() + "Z"}
+            "expires_at": invite.expires_at.isoformat() + "Z", "emailed": emailed}
 
 
 @router.delete("/invites/{invite_id}")

@@ -56,7 +56,7 @@ const teamMutation = fn => () => {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['members'] }); qc.invalidateQueries({ queryKey: ['invites'] }) },
   })
 }
-export const useCreateInvite = teamMutation(({ email, role }) => createInvite(email, role))
+export const useCreateInvite = teamMutation(({ email, role, sendEmail }) => createInvite(email, role, sendEmail))
 export const useRevokeInvite = teamMutation(revokeInvite)
 export const useChangeRole   = teamMutation(({ id, role }) => changeRole(id, role))
 export const useRemoveMember = teamMutation(removeMember)

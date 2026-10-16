@@ -100,6 +100,23 @@ ERNIE is multi-tenant. Every signup creates its own **workspace** and becomes it
 
 Run the tests with `cd backend && pip install -r requirements-dev.txt && pytest`.
 
+## Email (password reset, confirmation, invites)
+
+ERNIE sends email over plain **SMTP**, so any provider works (Resend, SendGrid, Postmark, Mailgun, Amazon SES, Gmail app password...). Without configuration it simply doesn't send: the app keeps working, password-reset requests still answer normally, and nothing sensitive is logged.
+
+Set these on the API (`blockradar-api` on Render):
+
+| Variable | Example |
+|---|---|
+| `EMAIL_BACKEND` | `smtp` |
+| `SMTP_HOST` / `SMTP_PORT` | Resend `smtp.resend.com` / `465`, SendGrid `smtp.sendgrid.net` / `587`, Postmark `smtp.postmarkapp.com` / `587` |
+| `SMTP_SECURITY` | `ssl` for port 465, `starttls` for 587 |
+| `SMTP_USER` / `SMTP_PASSWORD` | Resend: `resend` / your API key. SendGrid: `apikey` / your API key |
+| `EMAIL_FROM` | `ERNIE <no-reply@yourdomain.com>` (a sender your provider has verified) |
+| `PUBLIC_APP_URL` | your site URL, e.g. `https://blockradar-web.onrender.com` |
+
+What it enables: **forgot password** (1-hour single-use link, 3 per address per hour, ends all other sessions), **email confirmation** (banner + resend), and **emailed invites** (a checkbox on the Team card). Links are stored hashed, single-use and expire. Use `DEBUG=true` locally with the default `console` backend to see emails in the server log.
+
 ## How real data is interpreted
 
 - Each Blockradar **child address = one fintech**, named after the address `name`.

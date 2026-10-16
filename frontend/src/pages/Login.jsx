@@ -4,7 +4,7 @@ import AuthLayout, { GoogleButton, PasswordField } from './AuthLayout'
 import { Alert } from '../components/ui'
 import { loginUser } from '../api/client'
 
-export default function Login({ onLogin, onSignup, onHome, theme, onToggleTheme }) {
+export default function Login({ onLogin, onSignup, onForgot, onHome, theme, onToggleTheme }) {
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading]   = useState(false)
@@ -51,6 +51,9 @@ export default function Login({ onLogin, onSignup, onHome, theme, onToggleTheme 
           </div>
 
           <PasswordField id="password" value={password} onChange={setPassword} autoComplete="current-password" />
+          <div style={{ textAlign: 'right', marginTop: -8 }}>
+            <button type="button" className="link" style={{ fontSize: 13 }} onClick={onForgot}>Forgot password?</button>
+          </div>
 
           {error && <Alert tone="danger">{error}</Alert>}
 

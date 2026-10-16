@@ -173,6 +173,8 @@ def run_migrations(db: Session) -> None:
         with engine.begin() as conn:
             if "org_id" not in cols:
                 conn.execute(text("ALTER TABLE users ADD COLUMN org_id VARCHAR"))
+            if "password_changed_at" not in cols:
+                conn.execute(text("ALTER TABLE users ADD COLUMN password_changed_at TIMESTAMP"))
             if "role" not in cols:
                 conn.execute(text("ALTER TABLE users ADD COLUMN role VARCHAR NOT NULL DEFAULT 'admin'"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_users_org_id ON users (org_id)"))

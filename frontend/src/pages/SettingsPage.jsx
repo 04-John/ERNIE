@@ -111,9 +111,10 @@ function ConnectionCard() {
   )
 }
 
-function InviteForm() {
+function InviteForm({ emailEnabled }) {
   const [email, setEmail] = useState('')
   const [role, setRole] = useState('member')
+  const [sendEmail, setSendEmail] = useState(true)
   const [created, setCreated] = useState(null)   // { link, email, expires_at } shown once
   const [copied, setCopied] = useState(false)
   const create = useCreateInvite()
@@ -121,9 +122,9 @@ function InviteForm() {
 
   const submit = e => {
     e.preventDefault()
-    create.mutate({ email: email.trim(), role }, {
+    create.mutate({ email: email.trim(), role, sendEmail: emailEnabled && sendEmail && Boolean(email.trim()) }, {
       onSuccess: inv => {
-        setCreated({ link: `${window.location.origin}/?invite=${inv.token}`, email: inv.email, expires_at: inv.expires_at })
+        setCreated({ link: `${window.location.origin}/?invite=${inv.token}`, email: inv.email, emailed: inv.emailed, expires_at: inv.expires_at })
         setEmail(''); setCopied(false)
       },
     })
@@ -144,12 +145,17 @@ function InviteForm() {
             <option value="admin">Admin</option>
           </select>
         </div>
-        <button type="submit" className="btn btn-primary" disabled={create.isPending}><UserPlus size={15} /> Create invite link</button>
+        <button type="submit" className="btn btn-primary" disabled={create.isPending}><UserPlus size={15} /> {emailEnabled && sendEmail && email.trim() ? 'Send invite' : 'Create invite link'}</button>
       </form>
+      {emailEnabled && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-2)' }}>
+          <input type="checkbox" checked={sendEmail} onChange={e => setSendEmail(e.target.checked)} /> Email the invite to this address
+        </label>
+      )}
       {error && <Alert tone="danger">{error}</Alert>}
       {created && (
         <Alert tone="success">
-          <div><strong>Invite link created.</strong> Copy it now; for security it can't be shown again. It works once and expires {new Date(created.expires_at).toLocaleDateString()}.</div>
+          <div><strong>{created.emailed ? `Invite emailed to ${created.email}.` : 'Invite link created.'}</strong> {created.emailed ? 'You can also copy the link below. ' : 'Copy it now. '}It can't be shown again once you leave this page, works once, and expires {new Date(created.expires_at).toLocaleDateString()}.</div>
           <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
             <input className="input mono" readOnly value={created.link} onFocus={e => e.target.select()} style={{ flex: '1 1 260px', height: 38, fontSize: 12 }} aria-label="Invite link" />
             <button className="btn btn-sm" type="button" onClick={copy} style={{ height: 38 }}>{copied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy</>}</button>
@@ -160,7 +166,7 @@ function InviteForm() {
   )
 }
 
-function TeamCard() {
+function TeamCard({ emailEnabled }) {
   const { data: ws } = useWorkspace()
   const { data: members = [] } = useMembers()
   const isAdmin = ws?.role === 'admin'
@@ -230,7 +236,7 @@ function TeamCard() {
           )}
           <div style={{ marginTop: 20, paddingTop: 18, borderTop: '1px solid var(--border)' }}>
             <div className="stat-label" style={{ marginBottom: 12 }}>Invite a teammate</div>
-            <InviteForm />
+            <InviteForm emailEnabled={emailEnabled} />
           </div>
         </>
       ) : <p className="hint" style={{ marginTop: 14 }}>Only workspace admins can invite or manage teammates.</p>}
@@ -254,7 +260,7 @@ export default function SettingsPage({ user, theme, setTheme, onLogout }) {
       <Card title="Profile">
         <div className="kv">
           <Row k="Name">{user?.name || '—'}</Row>
-          <Row k="Email">{user?.email}</Row>
+          <Row k="Email">{user?.email}{user?.is_verified !== undefined && <span style={{ marginLeft: 8 }}><Badge tone={user.is_verified ? 'success' : 'warn'}>{user.is_verified ? 'Verified' : 'Unverified'}</Badge></span>}</Row>
           <Row k="Workspace">{ws?.workspace?.name || user?.workspace || '—'}</Row>
           <Row k="Role"><Badge tone={ws?.role === 'admin' ? 'accent' : 'neutral'}>{ws?.role || user?.role || '—'}</Badge></Row>
           <Row k="Last sign-in">{user?.last_login ? new Date(user.last_login + 'Z').toLocaleString() : '—'}</Row>
@@ -263,7 +269,7 @@ export default function SettingsPage({ user, theme, setTheme, onLogout }) {
 
       <ConnectionCard />
 
-      <TeamCard />
+      <TeamCard emailEnabled={user?.email_enabled} />
 
       <Card title="Data status" action={
         <button className="btn btn-sm" onClick={() => refresh.mutate()} disabled={busy || s?.data_source === 'simulated'}

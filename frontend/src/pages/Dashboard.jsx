@@ -4,7 +4,8 @@ import { LayoutDashboard, BarChart3, Wallet, Code2, Settings, LogOut, Menu, Sun,
 import Logo from '../components/Logo'
 import DataStatus from '../components/DataStatus'
 import Notifications from '../components/Notifications'
-import { Skeleton } from '../components/ui'
+import { Skeleton, Alert } from '../components/ui'
+import { resendVerification } from '../api/client'
 import { initials } from '../lib/format'
 import { useStatus } from '../hooks/useAnalytics'
 
@@ -37,6 +38,26 @@ function useRoute() {
     return () => window.removeEventListener('hashchange', onChange)
   }, [])
   return route
+}
+
+// Shown only when the server can send email and this account's address isn't confirmed yet
+function VerifyBanner({ user }) {
+  const [state, setState] = useState('idle')   // idle | sending | sent | error
+  if (!user?.email_enabled || user.is_verified !== false) return null
+  const resend = async () => {
+    setState('sending')
+    try { await resendVerification(); setState('sent') } catch { setState('error') }
+  }
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <Alert tone="warn">
+        <strong>Confirm your email address.</strong> We sent a link to {user.email}.{' '}
+        {state === 'sent' ? 'A new link is on its way.'
+          : state === 'error' ? 'Could not resend right now. Try again later.'
+          : <button className="link" onClick={resend} disabled={state === 'sending'}>{state === 'sending' ? 'Sending…' : 'Resend the email'}</button>}
+      </Alert>
+    </div>
+  )
 }
 
 function NavLink({ item, active, onNavigate }) {
@@ -158,6 +179,7 @@ export default function Dashboard({ theme, setTheme, user, onLogout }) {
         </header>
 
         <main className="content" id="main">
+          <VerifyBanner user={user} />
           <Suspense fallback={<div className="stack"><Skeleton height={60} /><Skeleton height={140} /><Skeleton height={320} /></div>}>
             <Page user={user} theme={theme} setTheme={setTheme} onLogout={onLogout} />
           </Suspense>
