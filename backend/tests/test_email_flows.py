@@ -2,7 +2,7 @@ import re
 import time
 from datetime import datetime, timedelta
 
-from conftest import register
+from conftest import register, set_plan
 from app.core.database import SessionLocal
 from app.models.auth_token import AuthToken
 from app.models.user import User
@@ -187,6 +187,7 @@ def test_invite_can_be_emailed_and_the_emailed_link_works(client, mailbox):
 
 def test_invite_is_not_emailed_unless_asked_and_possible(client, mailbox):
     admin = register(client, "Admin")
+    set_plan(client, admin, "pro")
     mailbox.clear()
     assert client.post("/workspace/invites", headers=admin, json={"email": "a@example.com"}).json()["emailed"] is False
     assert client.post("/workspace/invites", headers=admin, json={"send_email": True}).json()["emailed"] is False   # no address

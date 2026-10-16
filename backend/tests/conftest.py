@@ -142,6 +142,16 @@ def register(client, name="Test User"):
     return {"Authorization": f"Bearer {token}"}
 
 
+def set_plan(client, headers, plan):
+    """Put the caller's workspace on a plan (what a Stripe webhook or the admin console does in production)."""
+    from app.core.database import SessionLocal
+    from app.models.organization import Organization
+    org_id = client.get("/workspace", headers=headers).json()["workspace"]["id"]
+    with SessionLocal() as db:
+        db.query(Organization).filter(Organization.id == org_id).update({"plan": plan})
+        db.commit()
+
+
 class Mailbox(list):
     """Captures outgoing email. `enabled` toggles whether the server believes email is configured."""
     enabled = True

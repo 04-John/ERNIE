@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from conftest import register, make_dataset, KEY_A, WALLET_A
+from conftest import register, set_plan, make_dataset, KEY_A, WALLET_A
 from app.core.database import SessionLocal
 from app.models.alerts import AlertChannel, AlertEvent
 from app.models.user import User
@@ -201,6 +201,7 @@ def test_channels_are_private_to_their_workspace(client, outbox):
 
 def test_channel_limit(client, outbox):
     h = register(client)
+    set_plan(client, h, "business")
     for i in range(alerts.MAX_CHANNELS):
         assert add(client, h, "webhook", f"https://hooks.example.com/{i}").status_code == 200
         auth_service._attempts.clear()          # this test adds many channels; don't trip the per-IP limiter
@@ -219,6 +220,7 @@ def make_fintech_active(fake, index=1):
 
 def test_alert_lifecycle_baseline_then_high_risk_then_no_repeat_then_recovery(client, fake, outbox):
     h = register(client)
+    set_plan(client, h, "pro")
     wh = add(client, h, "webhook", WEBHOOK, "Ops").json()
     add(client, h, "slack", SLACK)
     connect(client, h)                                   # first sync = baseline

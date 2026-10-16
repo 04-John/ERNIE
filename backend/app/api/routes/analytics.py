@@ -7,6 +7,11 @@ from app.services.data_loader import get_status as pipeline_status, sync_now
 from app.services.sync import load_history
 import asyncio
 from fastapi import Query
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.models.organization import Organization
+from app.services import plans
 
 router = APIRouter()
 
@@ -74,8 +79,10 @@ async def refresh(ctx: OrgCtx = Depends(org_ctx)):
 
 
 @router.get("/history")
-async def get_history(days: int = Query(default=90, ge=1, le=800), ctx: OrgCtx = Depends(org_ctx)):
+async def get_history(days: int = Query(default=90, ge=1, le=800), ctx: OrgCtx = Depends(org_ctx), db: Session = Depends(get_db)):
     """Daily snapshots of headline metrics for trend charts. Demo workspaces have no history."""
     if ctx.key == DEMO_KEY:
         return {"data": [], "demo": True}
+    org = db.query(Organization).filter(Organization.id == ctx.key).first()
+    days = plans.clamp_history(org, days) if org else days
     return {"data": await asyncio.to_thread(load_history, ctx.key, days), "demo": False}

@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     assistant_model: str = "claude-opus-5-5"
     assistant_fallbacks: bool = True          # server-side refusal fallbacks (retried without if the API rejects them)
-    ai_monthly_limit: int = 100               # assistant messages per workspace per month
+    ai_monthly_limit: int = 0                 # 0 = use each plan's allowance; >0 overrides it for every workspace
 
     # Auth
     google_client_id: str = ""

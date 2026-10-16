@@ -21,8 +21,9 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_admin
 from app.core.database import get_db
 from app.models.alerts import AlertChannel
+from app.models.organization import Organization
 from app.models.user import User
-from app.services import alerts
+from app.services import alerts, plans
 from app.services.auth import get_current_user, rate_limit_auth
 
 router = APIRouter()
@@ -64,6 +65,8 @@ def list_channels(user: User = Depends(require_admin), db: Session = Depends(get
 async def add_channel(req: ChannelRequest, user: User = Depends(require_admin), db: Session = Depends(get_db)):
     if db.query(AlertChannel).filter(AlertChannel.org_id == user.org_id).count() >= alerts.MAX_CHANNELS:
         raise HTTPException(status_code=400, detail=f"A workspace can have at most {alerts.MAX_CHANNELS} alert channels.")
+    org = db.query(Organization).filter(Organization.id == user.org_id).first()
+    plans.check(org, "alert_channels", db.query(AlertChannel).filter(AlertChannel.org_id == user.org_id).count())
     try:
         built = await alerts.build_channel(user.org_id, req.kind, req.target, req.label)
     except alerts.ChannelError as e:

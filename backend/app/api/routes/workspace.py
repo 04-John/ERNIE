@@ -23,7 +23,9 @@ from app.services.auth import get_current_user, rate_limit_auth
 from app.services.blockradar import Creds, CredentialError, verify_credentials
 from app.services.data_loader import sync_now, drop_state, get_status
 from app.services.sync import purge_org_data
-from app.services import email as mailer
+from app.services import email as mailer, plans
+from app.services.assistant import used_this_month
+from app.models.alerts import AlertChannel
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -40,11 +42,22 @@ class ConnectRequest(BaseModel):
     wallet_id: str = Field(max_length=64)
 
 
+def _plan_view(db: Session, org: Organization) -> dict:
+    """The workspace's plan with what it has used so far, for the Billing card and upgrade prompts."""
+    pid = plans.plan_id(org)
+    members = db.query(User).filter(User.org_id == org.id).count() + len(pending_invites(db, org.id))
+    channels = db.query(AlertChannel).filter(AlertChannel.org_id == org.id).count()
+    use = {"members": members, "alert_channels": channels, "ai_messages": used_this_month(org.id)}
+    return {"id": pid, "name": plans.PLANS[pid]["name"], "price_usd": plans.PLANS[pid]["price_usd"],
+            "limits": {**plans.PLANS[pid]["limits"], "ai_messages": plans.limit(org, "ai_messages")}, "usage": use}
+
+
 def _summary(db: Session, user: User) -> dict:
     org = db.query(Organization).filter(Organization.id == user.org_id).first()
     conn = get_connection(db, user.org_id)
     return {
         "workspace": {"id": org.id if org else None, "name": org.name if org else "Workspace"},
+        "plan": _plan_view(db, org) if org else None,
         "role": user.role,
         "connection": {
             "connected": conn is not None,
@@ -156,6 +169,8 @@ def list_invites(user: User = Depends(require_admin), db: Session = Depends(get_
 def new_invite(req: InviteRequest, background: BackgroundTasks, user: User = Depends(require_admin), db: Session = Depends(get_db)):
     if req.role not in VALID_ROLES:
         raise HTTPException(status_code=400, detail="Role must be 'admin' or 'member'.")
+    org = db.query(Organization).filter(Organization.id == user.org_id).first()
+    plans.check(org, "members", db.query(User).filter(User.org_id == user.org_id).count() + len(pending_invites(db, user.org_id)))
     if len(pending_invites(db, user.org_id)) >= MAX_PENDING_INVITES:
         raise HTTPException(status_code=400, detail="Too many pending invitations. Revoke some first.")
     if req.email and db.query(User).filter(User.email == req.email.strip().lower()).first():

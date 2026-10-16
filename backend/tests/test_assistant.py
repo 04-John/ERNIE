@@ -74,7 +74,7 @@ def setup(client, ai, connected=True):
 
 def test_the_assistant_is_unavailable_without_a_server_key(client):
     h = register(client)
-    assert client.get("/assistant/status", headers=h).json() == {"available": False, "enabled": False, "used": 0, "limit": assistant.settings.ai_monthly_limit}
+    assert client.get("/assistant/status", headers=h).json() == {"available": False, "enabled": False, "used": 0, "limit": 10}
     assert enable(client, h).status_code == 400                         # can't opt in to something that isn't there
     assert chat(client, h).status_code == 503
 
@@ -193,7 +193,7 @@ def test_a_user_cannot_hammer_the_endpoint(client, ai, monkeypatch):
 def test_the_reply_is_returned_with_usage(client, ai):
     h = setup(client, ai)
     body = chat(client, h).json()
-    assert body["reply"] == "Call OmniPay first." and body["used"] == 1 and body["limit"] == assistant.settings.ai_monthly_limit
+    assert body["reply"] == "Call OmniPay first." and body["used"] == 1 and body["limit"] == 10
 
 
 def test_refusals_and_truncation_are_handled_gracefully(client, ai):

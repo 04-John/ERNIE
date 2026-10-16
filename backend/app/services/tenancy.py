@@ -184,6 +184,9 @@ def run_migrations(db: Session) -> None:
         if "ai_enabled" not in ocols:
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE organizations ADD COLUMN ai_enabled BOOLEAN NOT NULL DEFAULT FALSE"))
+        if "plan" not in ocols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE organizations ADD COLUMN plan VARCHAR NOT NULL DEFAULT 'free'"))
 
     if "daily_snapshots" in insp.get_table_names():
         scols = {c["name"] for c in insp.get_columns("daily_snapshots")}

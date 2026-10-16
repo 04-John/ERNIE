@@ -8,6 +8,7 @@ import {
 } from '../hooks/useAnalytics'
 import { BASE_URL } from '../api/client'
 import { fmtNum, timeAgo, copyText } from '../lib/format'
+import PlanCard from '../components/PlanCard'
 
 const SOURCE_LABEL = {
   real: { tone: 'success', text: 'Live Blockradar data' },
@@ -406,6 +407,8 @@ export default function SettingsPage({ user, theme, setTheme, onLogout }) {
           <Row k="Last sign-in">{user?.last_login ? new Date(user.last_login + 'Z').toLocaleString() : '—'}</Row>
         </div>
       </Card>
+
+      <PlanCard />
 
       <ConnectionCard />
 

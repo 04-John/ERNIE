@@ -23,7 +23,7 @@ from app.core.database import get_db
 from app.core.state import DEMO_KEY
 from app.models.organization import Organization
 from app.models.user import User
-from app.services import assistant
+from app.services import assistant, plans
 from app.services.auth import get_current_user, rate_limit_key
 
 settings = get_settings()
@@ -64,8 +64,9 @@ def _gate(db: Session, ctx: OrgCtx, user: User) -> Organization:
         raise HTTPException(status_code=403, detail="The AI assistant is off for this workspace. An admin can turn it on in Settings.")
     if not rate_limit_key(f"ai:{user.id}", 20, 60):
         raise HTTPException(status_code=429, detail="You're asking quickly. Wait a few seconds and try again.")
-    if assistant.used_this_month(org.id) >= settings.ai_monthly_limit:
-        raise HTTPException(status_code=429, detail=f"Your workspace has used its {settings.ai_monthly_limit} AI messages for this month.")
+    cap = plans.limit(org, "ai_messages")
+    if cap is not None and assistant.used_this_month(org.id) >= cap:
+        raise HTTPException(status_code=429, detail=f"Your workspace has used its {cap} AI messages for this month. Upgrade your plan for more.")
     return org
 
 
@@ -81,7 +82,7 @@ async def status(ctx: OrgCtx = Depends(org_ctx), db: Session = Depends(get_db)):
     org = _org(db, ctx)
     return {
         "available": assistant.available(), "enabled": bool(org.ai_enabled),
-        "used": assistant.used_this_month(org.id), "limit": settings.ai_monthly_limit,
+        "used": assistant.used_this_month(org.id), "limit": plans.limit(org, "ai_messages"),
     }
 
 
@@ -101,7 +102,7 @@ async def chat(req: ChatRequest, user: User = Depends(get_current_user), ctx: Or
     messages = [m.model_dump() for m in req.messages]
     result = await _run(assistant.chat, ctx.state, ctx.key == DEMO_KEY, messages)
     used = assistant.record_usage(org.id, result["usage"])
-    return {"reply": result["reply"], "used": used, "limit": settings.ai_monthly_limit}
+    return {"reply": result["reply"], "used": used, "limit": plans.limit(org, "ai_messages")}
 
 
 @router.post("/draft-outreach")
@@ -109,4 +110,4 @@ async def draft(req: DraftRequest, user: User = Depends(get_current_user), ctx: 
     org = _gate(db, ctx, user)
     result = await _run(assistant.draft_outreach, ctx.state, ctx.key == DEMO_KEY, req.fintech_id, req.channel)
     used = assistant.record_usage(org.id, result["usage"])
-    return {"text": result["text"], "used": used, "limit": settings.ai_monthly_limit}
+    return {"text": result["text"], "used": used, "limit": plans.limit(org, "ai_messages")}
