@@ -14,6 +14,7 @@ const Overview   = lazy(() => import('./Overview'))
 const Analytics  = lazy(() => import('./Analytics'))
 const Wallets    = lazy(() => import('./Wallets'))
 const Developers = lazy(() => import('./Developers'))
+const FintechDetail = lazy(() => import('./FintechDetail'))
 const SettingsPage = lazy(() => import('./SettingsPage'))
 
 const NAV = [
@@ -25,15 +26,18 @@ const NAV = [
 const BOTTOM = [{ id: 'settings', label: 'Settings', icon: Settings }]
 const ALL = [...NAV, ...BOTTOM]
 
-const routeFromHash = () => {
-  const id = window.location.hash.replace(/^#\/?/, '')
-  return ALL.some(n => n.id === id) ? id : 'overview'
+// "#/analytics" -> { id: 'analytics' }   "#/fintech/abc" -> { id: 'fintech', param: 'abc' }
+const parseHash = () => {
+  const hash = window.location.hash.replace(/^#\/?/, '')
+  const fin = hash.match(/^fintech\/(.+)$/)
+  if (fin) return { id: 'fintech', param: decodeURIComponent(fin[1]) }
+  return { id: ALL.some(n => n.id === hash) ? hash : 'overview', param: null }
 }
 
 function useRoute() {
-  const [route, setRoute] = useState(routeFromHash)
+  const [route, setRoute] = useState(parseHash)
   useEffect(() => {
-    const onChange = () => { setRoute(routeFromHash()); window.scrollTo({ top: 0 }) }
+    const onChange = () => { setRoute(parseHash()); window.scrollTo({ top: 0 }) }
     window.addEventListener('hashchange', onChange)
     return () => window.removeEventListener('hashchange', onChange)
   }, [])
@@ -116,9 +120,10 @@ function useSyncWatcher() {
 
 export default function Dashboard({ theme, setTheme, user, onLogout }) {
   useSyncWatcher()
-  const route = useRoute()
+  const { id: route, param } = useRoute()
   const [drawer, setDrawer] = useState(false)
-  const current = ALL.find(n => n.id === route)
+  const navId = route === 'fintech' ? 'analytics' : route          // a fintech page lives under Analytics
+  const current = ALL.find(n => n.id === navId)
 
   const closeDrawer = () => setDrawer(false)
   useEffect(() => {
@@ -128,7 +133,7 @@ export default function Dashboard({ theme, setTheme, user, onLogout }) {
     return () => document.removeEventListener('keydown', onKey)
   }, [drawer])
 
-  const Page = { overview: Overview, analytics: Analytics, wallets: Wallets, developers: Developers, settings: SettingsPage }[route]
+  const Page = { overview: Overview, analytics: Analytics, wallets: Wallets, developers: Developers, settings: SettingsPage, fintech: FintechDetail }[route]
 
   return (
     <div className="shell">
@@ -138,12 +143,12 @@ export default function Dashboard({ theme, setTheme, user, onLogout }) {
 
         <div className="sidebar-section">Workspace</div>
         <nav className="nav">
-          {NAV.map(item => <NavLink key={item.id} item={item} active={route === item.id} onNavigate={closeDrawer} />)}
+          {NAV.map(item => <NavLink key={item.id} item={item} active={navId === item.id} onNavigate={closeDrawer} />)}
         </nav>
 
         <div className="sidebar-foot">
           <nav className="nav">
-            {BOTTOM.map(item => <NavLink key={item.id} item={item} active={route === item.id} onNavigate={closeDrawer} />)}
+            {BOTTOM.map(item => <NavLink key={item.id} item={item} active={navId === item.id} onNavigate={closeDrawer} />)}
             <button className="nav-item btn-danger" style={{ width: '100%', textAlign: 'left' }} onClick={onLogout}>
               <LogOut size={18} strokeWidth={1.8} /> Sign out
             </button>
@@ -164,7 +169,7 @@ export default function Dashboard({ theme, setTheme, user, onLogout }) {
         <header className="topbar">
           <div className="topbar-left">
             <button className="btn btn-icon menu-btn" onClick={() => setDrawer(true)} aria-label="Open navigation"><Menu size={18} /></button>
-            <div className="crumbs hide-sm"><span>ERNIE</span><span>/</span><strong>{current?.label}</strong></div>
+            <div className="crumbs hide-sm"><span>ERNIE</span><span>/</span>{route === 'fintech' ? <><a href="#/analytics">Analytics</a><span>/</span><strong>Fintech</strong></> : <strong>{current?.label}</strong>}</div>
             <strong className="menu-btn" style={{ fontSize: 15 }}>{current?.label}</strong>
           </div>
           <div className="topbar-right">
@@ -181,7 +186,7 @@ export default function Dashboard({ theme, setTheme, user, onLogout }) {
         <main className="content" id="main">
           <VerifyBanner user={user} />
           <Suspense fallback={<div className="stack"><Skeleton height={60} /><Skeleton height={140} /><Skeleton height={320} /></div>}>
-            <Page user={user} theme={theme} setTheme={setTheme} onLogout={onLogout} />
+            <Page user={user} theme={theme} setTheme={setTheme} onLogout={onLogout} param={param} />
           </Suspense>
         </main>
       </div>

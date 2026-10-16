@@ -45,3 +45,19 @@ class Snapshot(Base):
     medium_risk       = Column(Integer, nullable=False, default=0)
     low_risk          = Column(Integer, nullable=False, default=0)
     unscored          = Column(Integer, nullable=False, default=0)
+
+
+class FintechDaily(Base):
+    """One row per fintech per UTC day: its risk and key metrics. Powers per-fintech trends, and is
+    the history a future trained churn model will learn from."""
+    __tablename__ = "fintech_daily"
+
+    org_id            = Column(String, ForeignKey("organizations.id", ondelete="CASCADE"), primary_key=True)
+    fintech_id        = Column(String, primary_key=True)
+    day               = Column(Date, primary_key=True)
+    fintech_name      = Column(String, nullable=False, default="")
+    risk              = Column(String, nullable=False, default="Unknown")
+    probability       = Column(Float, nullable=False, default=0.0)
+    total_volume_usd  = Column(Float, nullable=False, default=0.0)
+    transactions      = Column(Integer, nullable=False, default=0)
+    days_since_last_tx = Column(Integer, nullable=False, default=0)

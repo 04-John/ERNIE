@@ -390,6 +390,12 @@ code, pre, .mono { font-family: var(--font-mono); }
 .logo-word { font-weight: 800; letter-spacing: -0.04em; line-height: 1; }
 .logo-tag { font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
 
+/* ── Links inside tables/cards ── */
+.row-link { color: inherit; }
+.row-link:hover { color: var(--accent-text); text-decoration: underline; }
+.row-link-card { transition: border-color .15s, transform .15s; color: inherit; }
+.row-link-card:hover { border-color: var(--border-strong) !important; transform: translateX(2px); }
+
 /* ── Motion ── */
 @keyframes fadeUp  { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @keyframes shimmer { to { background-position: -200% 0; } }

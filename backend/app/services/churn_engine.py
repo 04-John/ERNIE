@@ -6,19 +6,11 @@ scores every fintech with a churn probability, and returns
 a ranked list with risk labels (High / Medium / Low).
 """
 
-import joblib
-import numpy as np
 import pandas as pd
-from pathlib import Path
 from datetime import datetime, timezone
 from typing import List, Dict
-from sklearn.ensemble import GradientBoostingClassifier
-from sklearn.preprocessing import LabelEncoder
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import roc_auc_score, classification_report
 
 END_DATE = pd.Timestamp("2026-03-01")
-MODEL_PATH = Path(__file__).parent.parent.parent / "models" / "churn_model.joblib"
 
 
 # ─────────────────────────────────────────────
@@ -61,6 +53,7 @@ def build_features(
         wallet_stats["days_since_last_tx"] = 999
         wallet_stats["volume_trend"]       = 0.0
         wallet_stats["vol_recent_3m"]      = 0.0
+        wallet_stats["vol_prior_3m"]       = 0.0
         return wallet_stats
 
     tx_df = pd.DataFrame(transactions)
@@ -80,6 +73,7 @@ def build_features(
         wallet_stats["days_since_last_tx"] = 999
         wallet_stats["volume_trend"]       = 0.0
         wallet_stats["vol_recent_3m"]      = 0.0
+        wallet_stats["vol_prior_3m"]       = 0.0
         return wallet_stats
 
     tx_stats = success.groupby("_fintechId").agg(
@@ -115,7 +109,7 @@ def build_features(
         wallet_stats
         .merge(tx_stats[["fintech_id","total_tx","total_volume",
                           "avg_tx_size","days_since_last_tx"]], on="fintech_id", how="left")
-        .merge(trend[["fintech_id","volume_trend","vol_recent_3m"]], on="fintech_id", how="left")
+        .merge(trend[["fintech_id","volume_trend","vol_recent_3m","vol_prior_3m"]], on="fintech_id", how="left")
     )
     # fintechs with no successful transaction: "never transacted", not "transacted just now"
     features["days_since_last_tx"] = features["days_since_last_tx"].fillna(999)
@@ -128,111 +122,84 @@ def build_features(
 # CHURN SCORING
 # ─────────────────────────────────────────────
 
-def score_churn(features: pd.DataFrame) -> pd.DataFrame:
-    """
-    Rule-based churn scoring — robust for any dataset size.
-    Produces a normalised churn_probability in [0, 1]
-    and a churn_risk label: High / Medium / Low.
-    """
-    df = features.copy()
+# Heuristic v2. Each signal is scaled to 0..1 on an ABSOLUTE scale (never relative to other
+# fintechs), weighted, and summed. There are no real churn outcomes to train on yet, so this is
+# deliberately a transparent rule set whose every point can be explained to the user.
+WEIGHTS = {"recency": 0.35, "dormancy": 0.20, "trend": 0.25, "activity": 0.20}
+RECENCY_FULL_DAYS = 90        # silent for this long = maximum recency risk
+LOW_ACTIVITY_FULL = 5         # fewer successful transactions than this = maximum activity risk
+LOW_ACTIVITY_HALF = 20        # fewer than this = half
+HIGH_AT = 0.60
+MEDIUM_AT = 0.30
 
-    df["score"] = 0.0
-
-    # dormancy rate (0–1) — strongest signal
-    df["score"] += df["dormancy_rate"] * 0.35
-
-    # days since last tx — normalised
-    max_days = df["days_since_last_tx"].max() or 1
-    df["score"] += (df["days_since_last_tx"] / max_days) * 0.25
-
-    # low transaction count
-    df["score"] += df["total_tx"].apply(
-        lambda x: 0.20 if x < 50 else (0.10 if x < 200 else 0)
-    )
-
-    # declining volume trend
-    df["score"] += df["volume_trend"].apply(
-        lambda x: 0.20 if x < -0.3 else (0.10 if x < 0 else 0)
-    )
-
-    # very low total volume
-    df["score"] += df["total_volume"].apply(
-        lambda x: 0.10 if x < 5_000 else 0
-    )
-
-    # normalise to [0, 1]
-    min_score = df["score"].min()
-    max_score = df["score"].max()
-    if max_score > min_score:
-        df["churn_probability"] = (
-            (df["score"] - min_score) / (max_score - min_score)
-        )
-    else:
-        df["churn_probability"] = 0.0
-
-    # risk label
-    df["churn_risk"] = pd.cut(
-        df["churn_probability"],
-        bins=[0, 0.33, 0.66, 1.0],
-        labels=["Low", "Medium", "High"],
-        include_lowest=True,
-    ).astype(object)
-    # no successful transactions = nothing to score; don't claim "Low"
-    df.loc[df["total_tx"] == 0, "churn_risk"] = "Unknown"
-
-    return df.sort_values("churn_probability", ascending=False)
+SIGNAL_LABELS = {
+    "recency":  "Time since last transaction",
+    "dormancy": "Dormant wallets",
+    "trend":    "Volume trend",
+    "activity": "Low activity",
+}
 
 
-# ─────────────────────────────────────────────
-# ML MODEL (optional — trains if data is large enough)
-# ─────────────────────────────────────────────
+def _clamp01(x: float) -> float:
+    return max(0.0, min(1.0, float(x)))
 
-def train_model(features: pd.DataFrame) -> None:
-    """
-    Trains a Gradient Boosting classifier if we have
-    enough labelled data (50+ fintechs). Saves to disk.
-    """
-    df = features.copy()
 
-    if len(df) < 50:
-        print("  Not enough data to train ML model — using rule-based scoring.")
-        return
+def _components(row) -> Dict[str, float]:
+    prior, recent = float(row["vol_prior_3m"]), float(row["vol_recent_3m"])
+    n = int(row["total_tx"])
+    return {
+        "recency":  _clamp01(float(row["days_since_last_tx"]) / RECENCY_FULL_DAYS),
+        "dormancy": _clamp01(row["dormancy_rate"]),
+        # only a drop counts, and only if there was an earlier period to compare against
+        "trend":    0.0 if prior <= 0 else _clamp01((prior - recent) / prior),
+        "activity": 1.0 if n < LOW_ACTIVITY_FULL else 0.5 if n < LOW_ACTIVITY_HALF else 0.0,
+    }
 
-    # synthetic labels from rule-based scores for training
-    df["label"] = (df["churn_probability"] > 0.5).astype(int)
 
-    le = LabelEncoder()
-    df["region_enc"] = le.fit_transform(df["region"].astype(str))
-
-    FEATURE_COLS = [
-        "total_wallets", "dormancy_rate", "total_tx", "total_volume",
-        "avg_tx_size", "days_since_last_tx", "volume_trend",
-        "vol_recent_3m", "avg_balance_usd", "region_enc",
+def _explain(comp: Dict[str, float], row) -> List[Dict]:
+    prior, recent = float(row["vol_prior_3m"]), float(row["vol_recent_3m"])
+    days, n = float(row["days_since_last_tx"]), int(row["total_tx"])
+    details = {
+        "recency":  f"Last transaction {days:.0f} day{'' if round(days) == 1 else 's'} ago",
+        "dormancy": f"{float(row['dormancy_rate']):.0%} of wallets inactive for {60}+ days",
+        "trend":    "No earlier 3-month period to compare with yet" if prior <= 0
+                    else f"Volume {(recent - prior) / prior:+.0%} vs the previous 3 months",
+        "activity": f"{n} successful transaction{'' if n == 1 else 's'}",
+    }
+    return [
+        {"key": k, "label": SIGNAL_LABELS[k], "weight": WEIGHTS[k], "value": round(comp[k], 4),
+         "points": round(comp[k] * WEIGHTS[k], 4), "detail": details[k]}
+        for k in WEIGHTS
     ]
 
-    X = df[FEATURE_COLS]
-    y = df["label"]
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.25, random_state=42, stratify=y
-    )
+def score_churn(features: pd.DataFrame) -> pd.DataFrame:
+    """
+    Absolute, explainable churn scoring. Adds:
+      churn_probability  0..1, the weighted sum of the signals (independent of other fintechs)
+      churn_risk         High (>= 0.60) / Medium (>= 0.30) / Low, or Unknown with no transaction history
+      breakdown          per-signal contribution, so the UI can show exactly why
+    """
+    df = features.copy()
+    if df.empty:
+        return df
 
-    model = GradientBoostingClassifier(
-        n_estimators=200,
-        max_depth=4,
-        learning_rate=0.05,
-        random_state=42,
-    )
-    model.fit(X_train, y_train)
+    probs, labels, breakdowns = [], [], []
+    for _, row in df.iterrows():
+        if int(row["total_tx"]) == 0:                      # nothing to judge: don't claim Low
+            probs.append(0.0); labels.append("Unknown"); breakdowns.append([])
+            continue
+        comp = _components(row)
+        p = round(sum(comp[k] * WEIGHTS[k] for k in WEIGHTS), 4)
+        probs.append(p)
+        labels.append("High" if p >= HIGH_AT else "Medium" if p >= MEDIUM_AT else "Low")
+        breakdowns.append(_explain(comp, row))
 
-    y_prob = model.predict_proba(X_test)[:, 1]
-    auc = roc_auc_score(y_test, y_prob)
-    print(f"  ML model AUC: {auc:.3f}")
-
-    # save model
-    MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(model, MODEL_PATH)
-    print(f"  Model saved -> {MODEL_PATH}")
+    df["churn_probability"] = probs
+    df["score"] = probs
+    df["churn_risk"] = labels
+    df["breakdown"] = breakdowns
+    return df.sort_values(["churn_probability", "days_since_last_tx"], ascending=[False, False])
 
 
 # ─────────────────────────────────────────────
@@ -402,8 +369,6 @@ def run_churn_pipeline(
           f"Medium={(scored.churn_risk=='Medium').sum()} "
           f"Low={(scored.churn_risk=='Low').sum()}")
 
-    # NOTE: train_model() is intentionally not called — it trains on labels derived
-    # from the rule-based score itself (circular) and nothing loads the result.
 
     summary = compute_summary(addresses, transactions, scored)
     monthly = compute_monthly_volume(transactions)

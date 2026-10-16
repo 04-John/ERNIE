@@ -62,7 +62,7 @@ export default function ChurnTable() {
                 const prob = (row.churn_probability || 0) * 100
                 return (
                   <tr key={row.fintech_id}>
-                    <td style={{ fontWeight: 600 }}>{row.fintech_name}</td>
+                    <td style={{ fontWeight: 600 }}><a href={`#/fintech/${encodeURIComponent(row.fintech_id)}`} className="row-link">{row.fintech_name}</a></td>
                     <td style={{ color: 'var(--text-2)' }}>{row.region}</td>
                     <td style={{ color: 'var(--text-2)' }}>{row.type || '—'}</td>
                     <td><Badge tone={tone}>{row.churn_risk}</Badge></td>

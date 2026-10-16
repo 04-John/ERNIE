@@ -429,6 +429,7 @@ async def refresh_state(key: str, creds: Optional[Creds] = None, trigger: str = 
                     _record_sync(key, error)
                     if error is None:
                         await asyncio.to_thread(sync.save_snapshot, key, results)
+                        await asyncio.to_thread(sync.save_fintech_daily, key, results)
                         events = await asyncio.to_thread(alerts.process_results, key, results)
                         if events:
                             _spawn(alerts.dispatch(key, events))

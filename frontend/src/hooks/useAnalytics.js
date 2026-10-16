@@ -5,7 +5,7 @@ import {
   fetchActivityTrend, fetchWalletList, fetchStatus, refreshData,
   fetchWorkspace, connectBlockradar, disconnectBlockradar,
   fetchMembers, fetchInvites, createInvite, revokeInvite, changeRole, removeMember, fetchHistory,
-  fetchChannels, addChannel, toggleChannel, removeChannel, testChannel, fetchAlertEvents,
+  fetchChannels, addChannel, toggleChannel, removeChannel, testChannel, fetchAlertEvents, fetchFintech,
 } from '../api/client'
 
 export const useSummary       = () => useQuery({ queryKey: ['summary'],        queryFn: fetchSummary })
@@ -74,3 +74,5 @@ export const useAddChannel    = channelMutation(({ kind, target, label }) => add
 export const useToggleChannel = channelMutation(({ id, enabled }) => toggleChannel(id, enabled))
 export const useRemoveChannel = channelMutation(removeChannel)
 export const useTestChannel   = channelMutation(testChannel)
+
+export const useFintech = id => useQuery({ queryKey: ['fintech', id], queryFn: () => fetchFintech(id), enabled: Boolean(id), retry: false })

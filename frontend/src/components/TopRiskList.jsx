@@ -21,7 +21,7 @@ export default function TopRiskList({ count = 5 }) {
           {top.map((f, i) => {
             const tone = RISK_TONE[f.churn_risk]
             return (
-              <div key={f.fintech_id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px', borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+              <a key={f.fintech_id} href={`#/fintech/${encodeURIComponent(f.fintech_id)}`} className="row-link-card" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px', borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
                 <span className="tnum" style={{ width: 20, fontSize: 12, color: 'var(--muted)' }}>{i + 1}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.fintech_name}</div>
@@ -31,7 +31,7 @@ export default function TopRiskList({ count = 5 }) {
                   <div className={`tone-${tone}`} style={{ fontSize: 16, fontWeight: 700, color: 'var(--tone)' }}>{fmtPct(f.churn_probability)}</div>
                   <Badge tone={tone}>{f.churn_risk}</Badge>
                 </div>
-              </div>
+              </a>
             )
           })}
         </div>

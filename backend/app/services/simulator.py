@@ -88,8 +88,14 @@ def generate_addresses(n: int = 100_000) -> List[Dict]:
         region, country = _pick_region()
         fintech_id = _random_id("ft_")
 
+        # Health profile: real portfolios aren't uniformly healthy. Healthy fintechs keep onboarding
+        # wallets right up to the end; fading ones stopped ~6-10 weeks ago; quiet ones months ago.
+        profile = random.choices(["healthy", "fading", "quiet"], weights=[0.60, 0.22, 0.18])[0]
+        idle_days = 0 if profile == "healthy" else random.randint(40, 75) if profile == "fading" else random.randint(130, 260)
+        latest_created = END_DATE - timedelta(days=30 + idle_days)
+
         for _ in range(counts[fi]):
-            created = _random_date(START_DATE, END_DATE - timedelta(days=30))
+            created = _random_date(START_DATE, latest_created)
             days_span = (END_DATE - created).days
 
             # dormancy logic
@@ -138,8 +144,15 @@ def generate_transactions(addresses: List[Dict], max_per_address: int = 60) -> L
     print("Simulating transactions...")
     transactions = []
 
-    active = [a for a in addresses if not a["isDormant"]]
-    sample = random.sample(active, min(len(active), 85_000))
+    # A dormant wallet is one that WAS active and went quiet, so it has history too. Only the wallets that
+    # never activated (lastActive == createdAt) have none. Sample per fintech so every fintech has a timeline.
+    by_fintech = {}
+    for a in addresses:
+        if a["lastActive"] != a["createdAt"]:
+            by_fintech.setdefault(a["_fintechId"], []).append(a)
+    sample = []
+    for group in by_fintech.values():
+        sample.extend(random.sample(group, min(len(group), 250)))
 
     for addr in sample:
         n_tx = min(int(np.random.exponential(8)) + 1, max_per_address)

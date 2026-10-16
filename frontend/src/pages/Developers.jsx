@@ -30,6 +30,7 @@ const GROUPS = [
   { name: 'Churn', endpoints: [
     { m: 'GET', p: '/churn/scores',       d: 'Churn scores',          params: 'limit (≤200), risk, region', ret: 'fintech_id, churn_probability, churn_risk, total_volume' },
     { m: 'GET', p: '/churn/high-risk',    d: 'High-risk fintechs',    ret: 'count, data[]' },
+    { m: 'GET', p: '/churn/fintech/{id}', d: 'One fintech in depth', ret: 'fintech (+ score breakdown), wallets, weekly activity, recent_transactions, daily risk history' },
     { m: 'GET', p: '/churn/distribution', d: 'Risk tier counts',      ret: 'High, Medium, Low, Unknown' },
   ]},
   { name: 'Wallets', endpoints: [

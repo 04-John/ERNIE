@@ -51,6 +51,7 @@ export const refreshData        = () => api.post('/analytics/refresh').then(r =>
 
 // ── Churn
 export const fetchChurnScores  = (params = {}) => api.get('/churn/scores', { params }).then(r => r.data)
+export const fetchFintech      = id => api.get(`/churn/fintech/${encodeURIComponent(id)}`).then(r => r.data)
 export const fetchHighRisk     = () => api.get('/churn/high-risk').then(r => r.data)
 export const fetchDistribution = () => api.get('/churn/distribution').then(r => r.data.data)
 

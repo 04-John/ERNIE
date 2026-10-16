@@ -22,7 +22,7 @@ from typing import Dict, List, Optional, Tuple
 
 from app.core.database import SessionLocal
 from app.models.organization import BlockradarConnection
-from app.models.stored import StoredAddress, StoredTransaction, Snapshot
+from app.models.stored import StoredAddress, StoredTransaction, Snapshot, FintechDaily
 from app.services.blockradar import BlockradarClient, Creds
 
 PAGE_SIZE = 100
@@ -261,6 +261,7 @@ def purge_org_data(org_id: str) -> None:
         db.query(StoredTransaction).filter(StoredTransaction.org_id == org_id).delete()
         db.query(StoredAddress).filter(StoredAddress.org_id == org_id).delete()
         db.query(Snapshot).filter(Snapshot.org_id == org_id).delete()
+        db.query(FintechDaily).filter(FintechDaily.org_id == org_id).delete()
         conn = db.query(BlockradarConnection).filter(BlockradarConnection.org_id == org_id).first()
         if conn:
             conn.last_full_sync_at = None
@@ -310,3 +311,32 @@ def load_history(org_id: str, days: int = 90) -> List[dict]:
             "total_volume_usd": r.total_volume_usd, "transactions": r.transactions, "fintechs": r.fintechs,
             "high_risk": r.high_risk, "medium_risk": r.medium_risk, "low_risk": r.low_risk, "unscored": r.unscored,
         } for r in rows]
+
+
+def save_fintech_daily(org_id: str, results: dict) -> None:
+    """Record today's risk + metrics for every fintech (replaces today's rows if re-synced)."""
+    scores = results.get("churn_scores") or []
+    today = datetime.now(timezone.utc).date()
+    with SessionLocal() as db:
+        db.query(FintechDaily).filter(FintechDaily.org_id == org_id, FintechDaily.day == today).delete()
+        db.add_all([
+            FintechDaily(
+                org_id=org_id, fintech_id=r["fintech_id"], day=today, fintech_name=r.get("fintech_name") or "",
+                risk=r.get("churn_risk", "Unknown"), probability=float(r.get("churn_probability") or 0.0),
+                total_volume_usd=float(r.get("total_volume") or 0.0), transactions=int(r.get("total_tx") or 0),
+                days_since_last_tx=int(r.get("days_since_last_tx") or 0),
+            ) for r in scores
+        ])
+        db.query(FintechDaily).filter(FintechDaily.org_id == org_id,
+                                      FintechDaily.day < today - timedelta(days=SNAPSHOT_RETENTION_DAYS)).delete()
+        db.commit()
+
+
+def load_fintech_history(org_id: str, fintech_id: str, days: int = 120) -> List[dict]:
+    since = datetime.now(timezone.utc).date() - timedelta(days=days)
+    with SessionLocal() as db:
+        rows = (db.query(FintechDaily)
+                .filter(FintechDaily.org_id == org_id, FintechDaily.fintech_id == fintech_id, FintechDaily.day >= since)
+                .order_by(FintechDaily.day).all())
+        return [{"day": r.day.isoformat(), "risk": r.risk, "probability": r.probability,
+                 "volume": r.total_volume_usd, "transactions": r.transactions, "days_since_last_tx": r.days_since_last_tx} for r in rows]
