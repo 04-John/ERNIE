@@ -11,7 +11,7 @@ Know which fintechs are going quiet, *before* they churn.
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-635BFF?logo=stripe&logoColor=white)
 ![Render](https://img.shields.io/badge/Deployed_on-Render-46E3B7?logo=render&logoColor=black)
-![Tests](https://img.shields.io/badge/tests-327_passing-3FB950)
+[![CI](https://github.com/04-John/ERNIE/actions/workflows/ci.yml/badge.svg)](https://github.com/04-John/ERNIE/actions/workflows/ci.yml)
 
 [Architecture](#1-system-architecture) · [Request lifecycle](#2-request-lifecycle-and-tenancy) · [Data pipeline](#3-data-pipeline) · [Scoring](#4-churn-scoring) · [Intelligence](#5-intelligence-layer) · [Alerts](#6-alerts) · [Auth](#7-accounts-workspaces-and-roles) · [Billing](#8-plans-and-billing) · [Public API](#9-public-api-pay-per-call) · [AI assistant](#10-ask-ernie-ai-assistant) · [Data model](#11-data-model) · [Security](#12-security-model) · [Deployment](#13-deployment) · [Frontend](#14-frontend-map)
 
@@ -858,7 +858,9 @@ Open http://localhost:5173. With `DEBUG=true` the API docs are at http://localho
 
 **Docker:** `cp .env.example .env` (set `SECRET_KEY` and `POSTGRES_PASSWORD`), then `docker compose up --build`.
 
-**Tests:** `cd backend && pip install -r requirements-dev.txt && pytest` (327 tests: scoring, tenancy, billing, API metering, security, migrations, CORS).
+**Tests:** `cd backend && pip install -r requirements.txt -r requirements-dev.txt && pytest` (scoring, tenancy, billing, API metering, security, migrations, CORS).
+
+**Continuous integration:** `.github/workflows/ci.yml` runs the backend tests (Python 3.11) and the frontend lint and build (Node 20) on every push to `main` and every pull request. The tests use a throwaway database and no real keys, so CI cannot reach Stripe, Anthropic or Blockradar. To stop broken code reaching production, set Render's *Auto-Deploy* to **After CI checks pass** on both services, and in GitHub add a branch rule that requires the two checks.
 
 <details>
 <summary><b>▶ Configuration reference</b></summary>
@@ -909,7 +911,7 @@ Open http://localhost:5173. With `DEBUG=true` the API docs are at http://localho
 │   │       ├── assistant.py        Claude integration, privacy rules, metering
 │   │       ├── plans.py · billing.py · apiaccess.py · audit.py · account.py
 │   │       └── auth.py · crypto.py · email.py · tenancy.py · simulator.py
-│   └── tests/                      327 tests
+│   └── tests/                      the backend test suite
 └── frontend/
     ├── index.html                  splash screen + theme bootstrap
     └── src/
