@@ -144,3 +144,47 @@ def test_disconnecting_deletes_the_stored_insights(client, fake):
     client.delete("/workspace/connection", headers=h)
     with SessionLocal() as db:
         assert db.query(InsightRecord).filter_by(org_id=o).count() == 0
+
+
+def test_dismissed_findings_are_counted_and_can_be_brought_back(client, fake):
+    h = register(client)
+    connect(client, h)
+    dormant(fake, 1)
+    refresh(client, h)
+    key = kinds(client, h)["high_risk"]["key"]
+    assert client.get("/intelligence/insights", headers=h).json()["dismissed"] == 0
+    client.post("/intelligence/insights/dismiss", headers=h, json={"key": key})
+    body = client.get("/intelligence/insights", headers=h).json()
+    assert body["dismissed"] >= 1 and "high_risk" not in kinds(client, h)
+    r = client.post("/intelligence/insights/restore", headers=h)
+    assert r.status_code == 200 and r.json()["restored"] >= 1
+    assert "high_risk" in kinds(client, h) and client.get("/intelligence/insights", headers=h).json()["dismissed"] == 0
+
+
+def test_restoring_only_touches_your_own_workspace_and_demo_is_refused(client, fake):
+    a, b = register(client, "A"), register(client, "B")
+    connect(client, a)
+    dormant(fake, 1)
+    refresh(client, a)
+    client.post("/intelligence/insights/dismiss", headers=a, json={"key": kinds(client, a)["high_risk"]["key"]})
+    assert client.post("/intelligence/insights/restore", headers=b).status_code == 400            # B is still on demo data
+    connect(client, b)
+    assert client.post("/intelligence/insights/restore", headers=b).json()["restored"] == 0       # nothing of B's was dismissed
+    assert client.get("/intelligence/insights", headers=a).json()["dismissed"] >= 1               # A's dismissal is intact
+    assert client.post("/intelligence/insights/restore").status_code == 401
+
+
+# ───────────────────────── wallet list: status filter ─────────────────────────
+
+def test_wallet_list_can_be_filtered_by_status(client, fake):
+    h = register(client)
+    connect(client, h)
+    dormant(fake, 1)                                                  # one wallet goes silent
+    refresh(client, h)
+    everything = client.get("/wallets/activity", headers=h).json()
+    by = {s: client.get(f"/wallets/activity?status={s}", headers=h).json() for s in ("active", "dormant", "never")}
+    assert everything["total"] == by["active"]["total"] + by["dormant"]["total"] + by["never"]["total"]
+    assert by["dormant"]["total"] >= 1 and all(w["isDormant"] and not w.get("neverActive") for w in by["dormant"]["data"])
+    assert all(not w["isDormant"] and not w.get("neverActive") for w in by["active"]["data"])
+    assert all(w.get("neverActive") for w in by["never"]["data"])
+    assert client.get("/wallets/activity?status=bogus", headers=h).status_code == 422

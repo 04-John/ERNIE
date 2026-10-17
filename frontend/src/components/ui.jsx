@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Info, XCircle } from 'lucide-react'
 
 export function Card({ title, subtitle, chip, action, children, className = '' }) {
@@ -56,12 +57,13 @@ export function PageHeader({ eyebrow, title, children, actions }) {
   )
 }
 
-export function StatCard({ label, value, sub, tone = 'accent', icon: Icon, loading }) {
+// eslint-disable-next-line no-unused-vars
+export function StatCard({ label, value, sub, tone = 'accent', icon: _icon, loading }) {
   return (
     <div className={`card stat tone-${tone}`}>
       <div className="stat-top">
         <span className="stat-label">{label}</span>
-        {Icon && <span className="stat-icon"><Icon size={17} strokeWidth={2} /></span>}
+        <span className="stat-square" aria-hidden="true" />
       </div>
       {loading ? <div className="skeleton" style={{ height: 34, width: '60%' }} /> : <div className="stat-value">{value}</div>}
       {sub && <div className="stat-sub">{sub}</div>}
@@ -89,11 +91,36 @@ export function Alert({ tone = 'info', children }) {
   )
 }
 
+/**
+ * A number that counts up to its value over 1.4s (ease-out cubic). If animation frames never tick
+ * (a background tab, a test browser) a 1.6s fallback still shows the final value.
+ */
+export function CountUp({ value, format = v => String(v), duration = 1400 }) {
+  const target = Number(value)
+  const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  const [shown, setShown] = useState(0)
+  useEffect(() => {
+    if (!Number.isFinite(target) || reduce) return undefined
+    let raf = 0
+    const start = performance.now()
+    const tick = now => {
+      const t = Math.min(1, (now - start) / duration)
+      setShown(target * (1 - Math.pow(1 - t, 3)))
+      if (t < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    const fallback = setTimeout(() => { cancelAnimationFrame(raf); setShown(target) }, duration + 200)
+    return () => { cancelAnimationFrame(raf); clearTimeout(fallback) }
+  }, [target, duration, reduce])
+  if (!Number.isFinite(target)) return <>{value}</>
+  return <>{format(reduce ? target : shown)}</>
+}
+
 // Shared Recharts tooltip, themed through CSS variables
 export function ChartTooltip({ active, payload, label, valueFormatter = v => v }) {
   if (!active || !payload?.length) return null
   return (
-    <div className="card" style={{ padding: '10px 14px', boxShadow: 'var(--shadow-md)' }}>
+    <div className="card" style={{ padding: '10px 14px', boxShadow: '0 12px 32px var(--shadow)' }}>
       {label != null && <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>{label}</div>}
       {payload.map(p => (
         <div key={p.dataKey || p.name} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, padding: '2px 0' }}>

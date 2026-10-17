@@ -9,6 +9,7 @@ import {
   fetchInsights, dismissInsight, fetchForecast, fetchCohorts, fetchHealth,
   fetchAssistantStatus, setAssistantEnabled, fetchPlans, fetchBilling,
   fetchDeveloper, createApiKey, revokeApiKey, fetchApiUsage,
+  fetchSparklines, restoreInsights, fetchApiPricing,
   fetchAudit, fetchAdminOverview, fetchAdminWorkspaces, setWorkspacePlan, fetchPublicStatus,
 } from '../api/client'
 
@@ -121,3 +122,15 @@ const devMutation = fn => () => {
 }
 export const useCreateApiKey = devMutation(({ name, mode }) => createApiKey(name, mode))
 export const useRevokeApiKey = devMutation(revokeApiKey)
+
+// ── Lists
+export const useSparklines = ids => useQuery({
+  queryKey: ['sparklines', ids.join(',')], queryFn: () => fetchSparklines(ids), enabled: ids.length > 0, retry: false, staleTime: 60_000,
+})
+
+export const useRestoreInsights = () => {
+  const qc = useQueryClient()
+  return useMutation({ mutationFn: restoreInsights, onSuccess: () => qc.invalidateQueries({ queryKey: ['insights'] }) })
+}
+
+export const useApiPricing = () => useQuery({ queryKey: ['api-pricing'], queryFn: fetchApiPricing, staleTime: 10 * 60_000, retry: false })

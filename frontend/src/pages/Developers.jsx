@@ -100,13 +100,16 @@ function CodeBlock({ samples }) {
   const [lang, setLang] = useState(langs[0])
   const [copied, setCopied] = useState(false)
   const copy = async () => { if (await copyText(samples[lang])) { setCopied(true); setTimeout(() => setCopied(false), 1600) } }
+  const tabbed = langs.length > 1
   return (
-    <div className="dev-codeblock">
+    <div className={`dev-codeblock ${tabbed ? '' : 'plain'}`}>
       <div className="dev-codebar">
-        <div className="dev-langs" role="tablist">
-          {langs.length > 1 ? langs.map(l => <button key={l} role="tab" aria-selected={lang === l} onClick={() => setLang(l)}>{l}</button>) : <span>{langs[0]}</span>}
-        </div>
-        <button className="dev-copy" onClick={copy} aria-label="Copy code">{copied ? <><Check size={13} /> Copied</> : <><Copy size={13} /> Copy</>}</button>
+        {tabbed
+          ? <div className="segmented" role="tablist" aria-label="Language">
+              {langs.map(l => <button key={l} role="tab" aria-pressed={lang === l} onClick={() => setLang(l)}>{l}</button>)}
+            </div>
+          : <span className="label">{langs[0]}</span>}
+        <button className="btn btn-sm" onClick={copy} aria-label="Copy code">{copied ? <><Check size={13} /> Copied</> : <><Copy size={13} /> Copy</>}</button>
       </div>
       <pre><code>{samples[lang]}</code></pre>
     </div>

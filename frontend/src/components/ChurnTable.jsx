@@ -1,21 +1,28 @@
 import { useMemo, useState } from 'react'
-import { Search, Users } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { useChurnScores, useRegional } from '../hooks/useAnalytics'
-import { Card, Badge, Skeleton, EmptyState, ProgressBar } from './ui'
-import { fmtNum, fmtUsd, fmtPct, RISK_TONE } from '../lib/format'
+import { useFintechDrawer } from '../lib/drawer'
+import { Skeleton } from './ui'
+import { fmtNum, fmtUsd, fmtPct } from '../lib/format'
 
 const RISKS = ['High', 'Medium', 'Low', 'Unknown']
+const COLS = 'minmax(0,1.3fr) 120px 100px 90px minmax(0,1.2fr) 70px 80px 90px'
+const tierClass = risk => `tier-${String(risk || 'unknown').toLowerCase()}`
 
-export default function ChurnTable() {
-  const [risk, setRisk]     = useState(null)
+/** Every fintech ranked by churn probability. Clicking a row opens its drawer. The risk filter can be driven from outside (the tier tiles). */
+export default function ChurnTable({ risk, onRisk }) {
+  const [localRisk, setLocalRisk] = useState(null)
   const [region, setRegion] = useState(null)
   const [query, setQuery]   = useState('')
   const [limit, setLimit]   = useState(20)
+  const { openFintech } = useFintechDrawer()
+  const activeRisk = onRisk ? risk : localRisk
+  const setRisk = r => { (onRisk || setLocalRisk)(r); setLimit(20) }
 
   const { data: regions = [] } = useRegional()
   const { data, isLoading, isFetching } = useChurnScores({
     limit,
-    ...(risk ? { risk } : {}),
+    ...(activeRisk ? { risk: activeRisk } : {}),
     ...(region ? { region } : {}),
   })
 
@@ -29,69 +36,70 @@ export default function ChurnTable() {
   if (isLoading) return <Skeleton height={420} />
 
   return (
-    <Card title="Fintech churn risk" subtitle="Ranked by churn probability" chip={`${total} fintech${total === 1 ? '' : 's'}`}>
-      <div className="filters">
-        <div className="search">
-          <Search size={15} />
-          <input className="input" placeholder="Search fintechs" value={query} onChange={e => setQuery(e.target.value)} aria-label="Search fintechs" />
+    <section className="panel" id="fintech-table">
+      <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+            <h2 className="section-title">Fintech churn risk</h2>
+            <div className="panel-sub">Ranked by churn probability · click a row for the reasons</div>
+          </div>
+          <span className="chip">{total} fintech{total === 1 ? '' : 's'}</span>
         </div>
-        {RISKS.map(r => (
-          <button key={r} className="pill" aria-pressed={risk === r} onClick={() => { setRisk(risk === r ? null : r); setLimit(20) }}>{r}</button>
-        ))}
-        {regions.length > 1 && <span style={{ width: 1, height: 20, background: 'var(--border)' }} />}
-        {regions.length > 1 && regions.map(r => (
-          <button key={r.region} className="pill" aria-pressed={region === r.region} onClick={() => { setRegion(region === r.region ? null : r.region); setLimit(20) }}>{r.region}</button>
-        ))}
+        <div className="filters" style={{ marginTop: 14, marginBottom: 0 }}>
+          <div className="search">
+            <Search size={14} />
+            <input className="input" placeholder="Search fintechs" value={query} onChange={e => setQuery(e.target.value)} aria-label="Search fintechs" />
+          </div>
+          {RISKS.map(r => (
+            <button key={r} className="pill" aria-pressed={activeRisk === r} onClick={() => setRisk(activeRisk === r ? null : r)}>{r}</button>
+          ))}
+          {regions.length > 1 && <span className="pill-divider" />}
+          {regions.length > 1 && regions.map(r => (
+            <button key={r.region} className="pill" aria-pressed={region === r.region} onClick={() => { setRegion(region === r.region ? null : r.region); setLimit(20) }}>{r.region}</button>
+          ))}
+        </div>
       </div>
 
-      {rows.length === 0 ? (
-        <EmptyState icon={Users} title="No fintechs match">Try clearing a filter or search.</EmptyState>
-      ) : (
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Fintech</th><th>Region</th><th>Type</th><th>Risk</th><th>Probability</th>
-                <th className="num">Wallets</th><th className="num">Dormancy</th><th className="num">Volume</th>
-              </tr>
-            </thead>
-            <tbody style={{ opacity: isFetching ? .6 : 1, transition: 'opacity .15s' }}>
-              {rows.map(row => {
-                const tone = RISK_TONE[row.churn_risk] || 'neutral'
-                const scored = row.churn_risk !== 'Unknown'
-                const prob = (row.churn_probability || 0) * 100
-                return (
-                  <tr key={row.fintech_id}>
-                    <td style={{ fontWeight: 600 }}><a href={`#/fintech/${encodeURIComponent(row.fintech_id)}`} className="row-link">{row.fintech_name}</a></td>
-                    <td style={{ color: 'var(--text-2)' }}>{row.region}</td>
-                    <td style={{ color: 'var(--text-2)' }}>{row.type || '—'}</td>
-                    <td><Badge tone={tone}>{row.churn_risk}</Badge></td>
-                    <td style={{ minWidth: 150 }}>
-                      {scored ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div style={{ flex: 1 }}><ProgressBar value={prob} tone={tone} /></div>
-                          <span className="tnum" style={{ fontSize: 12, width: 44, textAlign: 'right' }}>{prob.toFixed(1)}%</span>
-                        </div>
-                      ) : <span className="hint">No transactions yet</span>}
-                    </td>
-                    <td className="num">{fmtNum(row.total_wallets)}</td>
-                    <td className="num">{fmtPct(row.dormancy_rate)}</td>
-                    <td className="num">{fmtUsd(row.total_volume)}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+      <div className="gt-wrap">
+        <div style={{ minWidth: 960 }}>
+          <div className="gt-head" style={{ gridTemplateColumns: COLS }}>
+            <span>Fintech</span><span>Region</span><span>Type</span><span>Risk</span><span>Probability</span>
+            <span className="gt-r">Wallets</span><span className="gt-r">Dormancy</span><span className="gt-r">Volume</span>
+          </div>
+          <div style={{ opacity: isFetching ? .6 : 1, transition: 'opacity .15s' }}>
+            {rows.map(row => {
+              const scored = row.churn_risk !== 'Unknown'
+              const prob = (row.churn_probability || 0) * 100
+              return (
+                <button key={row.fintech_id} className={`gt-row ${tierClass(row.churn_risk)}`} style={{ gridTemplateColumns: COLS }} onClick={() => openFintech(row.fintech_id)}>
+                  <span style={{ fontWeight: 600 }}>{row.fintech_name}</span>
+                  <span style={{ color: 'var(--text-2)' }}>{row.region}</span>
+                  <span style={{ color: 'var(--text-2)' }}>{row.type || '—'}</span>
+                  <span className="sbadge" style={{ justifySelf: 'start' }}>{row.churn_risk}</span>
+                  {scored ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div className="bar" style={{ flex: 1 }}><i style={{ width: `${prob}%`, background: 'var(--tone)' }} /></div>
+                      <span className="mono" style={{ width: 46, textAlign: 'right', fontSize: 12, fontWeight: 600, color: 'var(--tone)' }}>{prob.toFixed(1)}%</span>
+                    </div>
+                  ) : <span className="hint">No transactions yet</span>}
+                  <span className="gt-r">{fmtNum(row.total_wallets)}</span>
+                  <span className="gt-r">{fmtPct(row.dormancy_rate)}</span>
+                  <span className="gt-r">{fmtUsd(row.total_volume)}</span>
+                </button>
+              )
+            })}
+            {rows.length === 0 && <div style={{ padding: 40, textAlign: 'center', fontSize: 14, color: 'var(--muted)' }}>No fintechs match. Try clearing a filter or search.</div>}
+          </div>
         </div>
-      )}
+      </div>
 
       {limit < total && !query && (
-        <div style={{ textAlign: 'center', marginTop: 16 }}>
+        <div style={{ padding: 14, textAlign: 'center', borderTop: '1px solid var(--border)' }}>
           <button className="btn btn-sm" onClick={() => setLimit(l => Math.min(l + 20, 200))} disabled={limit >= 200}>
             Show more ({Math.min(total - limit, 200 - limit)} more)
           </button>
         </div>
       )}
-    </Card>
+    </section>
   )
 }

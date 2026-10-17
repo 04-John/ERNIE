@@ -347,6 +347,19 @@ def load_fintech_history(org_id: str, fintech_id: str, days: int = 120) -> List[
                  "volume": r.total_volume_usd, "transactions": r.transactions, "days_since_last_tx": r.days_since_last_tx} for r in rows]
 
 
+def load_fintech_sparklines(org_id: str, fintech_ids: List[str], days: int = 30) -> dict:
+    """{fintech_id: [probability, ...]} oldest first, for the given fintechs of ONE workspace."""
+    since = datetime.now(timezone.utc).date() - timedelta(days=days)
+    out: dict = {}
+    with SessionLocal() as db:
+        rows = (db.query(FintechDaily.fintech_id, FintechDaily.probability)
+                .filter(FintechDaily.org_id == org_id, FintechDaily.fintech_id.in_(fintech_ids), FintechDaily.day >= since)
+                .order_by(FintechDaily.fintech_id, FintechDaily.day).all())
+    for fid, prob in rows:
+        out.setdefault(fid, []).append(round(float(prob), 4))
+    return out
+
+
 # ─────────────────────────────────────────────
 # INSIGHTS (persistence + dismissal)
 # ─────────────────────────────────────────────
@@ -399,6 +412,23 @@ def load_active_insights(org_id: str) -> List[dict]:
             "fintech_ids": json.loads(r.fintech_ids), "evidence": json.loads(r.evidence), "priority": r.priority,
             "first_seen": r.first_seen.isoformat() + "Z", "dismissable": True,
         } for r in rows]
+
+
+def count_dismissed(org_id: str) -> int:
+    with SessionLocal() as db:
+        return (db.query(InsightRecord).filter(InsightRecord.org_id == org_id, InsightRecord.dismissed_at.isnot(None),
+                                               InsightRecord.resolved_at.is_(None)).count())
+
+
+def restore_dismissed(org_id: str) -> int:
+    """Bring back every finding the team dismissed that still applies. Returns how many came back."""
+    with SessionLocal() as db:
+        rows = (db.query(InsightRecord).filter(InsightRecord.org_id == org_id, InsightRecord.dismissed_at.isnot(None),
+                                               InsightRecord.resolved_at.is_(None)).all())
+        for r in rows:
+            r.dismissed_at = None
+        db.commit()
+        return len(rows)
 
 
 def dismiss_insight(org_id: str, key: str) -> bool:

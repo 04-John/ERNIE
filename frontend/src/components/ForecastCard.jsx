@@ -37,8 +37,8 @@ export default function ForecastCard() {
     <Card title="Volume forecast" subtitle="Next 30 days, with an 80% range"
       chip={change == null ? undefined : `${change >= 0 ? '+' : ''}${(change * 100).toFixed(0)}% vs last 30 days`}>
       <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 14 }}>
-        <div><div className="stat-label">Last 30 days</div><div className="tnum" style={{ fontSize: 22, fontWeight: 700 }}>{fmtUsd(fc.last30)}</div></div>
-        <div><div className="stat-label">Next 30 days (forecast)</div><div className="tnum" style={{ fontSize: 22, fontWeight: 700, color: change < 0 ? 'var(--danger)' : 'var(--success)' }}>{fmtUsd(fc.next30)}</div></div>
+        <div><div className="stat-label">Last 30 days</div><div className="tnum display" style={{ fontSize: 24, fontWeight: 700, marginTop: 4 }}>{fmtUsd(fc.last30)}</div></div>
+        <div><div className="stat-label">Next 30 days (forecast)</div><div className="tnum display" style={{ fontSize: 24, fontWeight: 700, marginTop: 4, color: change < 0 ? 'var(--danger)' : 'var(--success)' }}>{fmtUsd(fc.next30)}</div></div>
       </div>
       <ResponsiveContainer width="100%" height={280}>
         <ComposedChart data={points} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
@@ -48,8 +48,8 @@ export default function ForecastCard() {
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-          <XAxis dataKey="label" interval="preserveStartEnd" tick={{ fill: 'var(--muted)', fontSize: 12 }} axisLine={false} tickLine={false} />
-          <YAxis tickFormatter={fmtUsd} tick={{ fill: 'var(--muted)', fontSize: 12 }} axisLine={false} tickLine={false} width={64} />
+          <XAxis dataKey="label" interval="preserveStartEnd" tick={{ fill: 'var(--muted)', fontSize: 11, fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} />
+          <YAxis tickFormatter={fmtUsd} tick={{ fill: 'var(--muted)', fontSize: 11, fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} width={64} />
           <Tooltip content={<ChartTooltip valueFormatter={v => (Array.isArray(v) ? `${fmtUsd(v[0])} to ${fmtUsd(v[1])}` : fmtUsd(v))} />} cursor={{ stroke: 'var(--border-strong)' }} />
           <ReferenceLine x={label(lastActual.day)} stroke="var(--border-strong)" strokeDasharray="4 4" label={{ value: 'Today', fill: 'var(--muted)', fontSize: 11, position: 'top' }} />
           <Area dataKey="band" name="80% range" stroke="none" fill="url(#bandFill)" connectNulls />

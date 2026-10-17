@@ -1,6 +1,6 @@
-import { X, ArrowRight, Lightbulb } from 'lucide-react'
+import { X } from 'lucide-react'
 import { useChurnScores, useDismissInsight } from '../hooks/useAnalytics'
-import { Badge, EmptyState } from './ui'
+import { useFintechDrawer } from '../lib/drawer'
 import { fmtUsd } from '../lib/format'
 import { SEVERITY } from '../lib/severity'
 
@@ -25,69 +25,60 @@ function evidenceLines(i) {
   }
 }
 
-export function InsightCard({ insight, names, compact = false }) {
+export function InsightCard({ insight, names }) {
   const dismiss = useDismissInsight()
+  const { openFintech } = useFintechDrawer()
   const sev = SEVERITY[insight.severity] || SEVERITY.info
   const Icon = sev.icon
   const lines = evidenceLines(insight).filter(Boolean)
   const ids = (insight.fintech_ids || []).filter(id => names?.[id]).slice(0, 4)
 
   return (
-    <article className={`card tone-${sev.tone}`} style={{ padding: compact ? 16 : 20, borderLeft: '3px solid var(--tone)' }}>
-      <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-        <span className="stat-icon" style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0 }}><Icon size={18} /></span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <h3 style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em' }}>{insight.title}</h3>
-            {!compact && <Badge tone={sev.tone}>{sev.label}</Badge>}
-          </div>
-          {insight.detail && <p style={{ fontSize: 13.5, color: 'var(--text-2)', marginTop: 6 }}>{insight.detail}</p>}
-
-          {!compact && lines.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-              {lines.map((l, k) => <span key={k} className="chip">{l}</span>)}
-            </div>
-          )}
-
-          {insight.action && (
-            <div style={{ display: 'flex', gap: 8, marginTop: 12, fontSize: 13.5 }}>
-              <Lightbulb size={15} style={{ color: 'var(--tone)', flexShrink: 0, marginTop: 3 }} />
-              <span><strong>Next step:</strong> <span style={{ color: 'var(--text-2)' }}>{insight.action}</span></span>
-            </div>
-          )}
-
-          {!compact && ids.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-              {ids.map(id => (
-                <a key={id} href={`#/fintech/${encodeURIComponent(id)}`} className="btn btn-sm">{names[id]} <ArrowRight size={13} /></a>
-              ))}
-              {insight.fintech_ids.length > ids.length && <span className="hint" style={{ alignSelf: 'center' }}>+{insight.fintech_ids.length - ids.length} more</span>}
-            </div>
-          )}
+    <article className={`insight tone-${sev.tone}`}>
+      <span className="glyph"><Icon size={18} /></span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <h3 className="display insight-title">{insight.title}</h3>
+          <span className="sbadge">{sev.label}</span>
         </div>
-        {insight.dismissable && (
-          <button className="btn btn-icon btn-ghost" style={{ width: 30, height: 30 }} aria-label="Dismiss this insight"
-            title="Hide until the situation changes" onClick={() => dismiss.mutate(insight.key)} disabled={dismiss.isPending}>
-            <X size={15} />
-          </button>
+        {insight.detail && <p className="insight-detail">{insight.detail}</p>}
+
+        {lines.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+            {lines.map((l, k) => <span key={k} className="chip mono">{l}</span>)}
+          </div>
+        )}
+
+        {insight.action && (
+          <div className="insight-next"><strong>Next step:</strong> <span>{insight.action}</span></div>
+        )}
+
+        {ids.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+            {ids.map(id => <button key={id} className="btn btn-sm" onClick={() => openFintech(id)}>{names[id]} →</button>)}
+            {insight.fintech_ids.length > ids.length && <span className="hint" style={{ alignSelf: 'center' }}>+{insight.fintech_ids.length - ids.length} more</span>}
+          </div>
         )}
       </div>
+      {insight.dismissable && (
+        <button className="btn btn-icon btn-ghost" style={{ width: 30, height: 30 }} aria-label="Dismiss this insight"
+          title="Hide until the situation changes" onClick={() => dismiss.mutate(insight.key)} disabled={dismiss.isPending}>
+          <X size={16} />
+        </button>
+      )}
     </article>
   )
 }
 
-/** A list of insight cards, resolving fintech names for the "view fintech" links. */
-export function InsightList({ insights, compact = false, empty }) {
+/** A list of insight cards, resolving fintech names for the "view fintech" buttons. */
+export function InsightList({ insights, empty }) {
   const { data } = useChurnScores({ limit: 200 })
   const names = Object.fromEntries((data?.data || []).map(f => [f.fintech_id, f.fintech_name]))
 
   if (!insights.length) {
     return empty || (
-      <EmptyState icon={Lightbulb} title="Nothing needs your attention">
-        ERNIE checks your data after every sync. Findings appear here when something changes.
-      </EmptyState>
+      <div className="insight-empty">Nothing here. ERNIE checks again after every sync.</div>
     )
   }
-  return <div style={{ display: 'grid', gap: compact ? 10 : 14 }}>{insights.map(i => <InsightCard key={i.key} insight={i} names={names} compact={compact} />)}</div>
+  return <div style={{ display: 'grid', gap: 12 }}>{insights.map(i => <InsightCard key={i.key} insight={i} names={names} />)}</div>
 }
-

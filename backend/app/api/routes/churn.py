@@ -3,10 +3,23 @@ import asyncio
 from typing import Optional
 from app.api.deps import OrgCtx, org_ctx
 from app.core.state import DEMO_KEY
-from app.services.sync import load_fintech_history
+from app.services.sync import load_fintech_history, load_fintech_sparklines
 import pandas as pd
 
 router = APIRouter()
+
+
+def top_reason(row: dict):
+    """The one-line reason a fintech scored as it did: the detail of the signal that added the most points."""
+    items = [b for b in (row.get("breakdown") or []) if b.get("points", 0) > 0]
+    return max(items, key=lambda b: b["points"])["detail"] if items else None
+
+
+def _with_reasons(scores: list) -> pd.DataFrame:
+    """The list view: no full breakdown (it is heavy), but each row keeps its single top reason."""
+    df = pd.DataFrame(scores)
+    df["top_reason"] = [top_reason(r) for r in scores]
+    return df.drop(columns=["breakdown"], errors="ignore")
 
 
 @router.get("/scores")
@@ -24,7 +37,7 @@ async def get_churn_scores(
     if not scores:
         return {"data": []}
 
-    df = pd.DataFrame(scores).drop(columns=["breakdown"], errors="ignore")
+    df = _with_reasons(scores)
 
     # filters
     if risk:
@@ -51,7 +64,7 @@ async def get_high_risk(ctx: OrgCtx = Depends(org_ctx)):
     if not scores:
         return {"data": []}
 
-    df = pd.DataFrame(scores).drop(columns=["breakdown"], errors="ignore")
+    df = _with_reasons(scores)
     high = df[df["churn_risk"] == "High"].copy()
     high["churn_probability"] = high["churn_probability"].round(4)
 
@@ -59,6 +72,16 @@ async def get_high_risk(ctx: OrgCtx = Depends(org_ctx)):
         "count": len(high),
         "data": high.to_dict(orient="records"),
     }
+
+
+@router.get("/sparklines")
+async def get_sparklines(ids: str = Query(max_length=1200, description="Comma-separated fintech ids (at most 20)"),
+                         days: int = Query(default=30, ge=7, le=120), ctx: OrgCtx = Depends(org_ctx)):
+    """Daily churn probability for a handful of fintechs, for the small trend lines in lists. Demo data has no history."""
+    wanted = [i for i in dict.fromkeys(x.strip() for x in ids.split(",")) if i][:20]
+    if ctx.key == DEMO_KEY or not wanted:
+        return {"data": {}}
+    return {"data": await asyncio.to_thread(load_fintech_sparklines, ctx.key, wanted, days)}
 
 
 @router.get("/distribution")

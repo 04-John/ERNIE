@@ -24,6 +24,14 @@ export default function TrendsCard() {
   if (isLoading) return <Skeleton height={340} />
 
   const points = (data?.data || []).map(p => ({ ...p, label: dayLabel(p.day) }))
+  const first = points.find(p => p[metric.key] != null), last = [...points].reverse().find(p => p[metric.key] != null)
+  const now = last?.[metric.key]
+  let delta = null
+  if (first && last && first !== last && Number(first[metric.key]) !== 0) {
+    const change = (now - first[metric.key]) / Math.abs(first[metric.key])
+    delta = `${change >= 0 ? '+' : ''}${(change * 100).toFixed(0)}% since ${first.label}`
+  }
+  const tick = { fill: 'var(--muted)', fontSize: 11, fontFamily: 'var(--font-mono)' }
 
   return (
     <Card title="Trends" subtitle="Daily snapshots of your workspace" chip={`${points.length} day${points.length === 1 ? '' : 's'} recorded`}
@@ -37,6 +45,13 @@ export default function TrendsCard() {
           <button key={m.key} className="pill" aria-pressed={metricKey === m.key} onClick={() => setMetricKey(m.key)}>{m.label}</button>
         ))}
       </div>
+
+      {now != null && !data?.demo && points.length >= 2 && (
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 10 }}>
+          <span className="display" style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.02em', color: metric.color }}>{metric.fmt(now)}</span>
+          {delta && <span style={{ fontSize: 13, color: 'var(--muted)', whiteSpace: 'nowrap' }}>{delta}</span>}
+        </div>
+      )}
 
       {data?.demo ? (
         <EmptyState icon={TrendingUp} title="Connect your wallet to track trends">
@@ -55,8 +70,8 @@ export default function TrendsCard() {
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-            <XAxis dataKey="label" interval="preserveStartEnd" tick={{ fill: 'var(--muted)', fontSize: 12 }} axisLine={false} tickLine={false} />
-            <YAxis tickFormatter={metric.axis} tick={{ fill: 'var(--muted)', fontSize: 12 }} axisLine={false} tickLine={false} width={64} allowDecimals={false} />
+            <XAxis dataKey="label" interval="preserveStartEnd" tick={tick} axisLine={false} tickLine={false} />
+            <YAxis tickFormatter={metric.axis} tick={tick} axisLine={false} tickLine={false} width={64} allowDecimals={false} />
             <Tooltip content={<ChartTooltip valueFormatter={metric.fmt} />} cursor={{ stroke: 'var(--border-strong)' }} />
             <Area type="monotone" dataKey={metric.key} name={metric.label} stroke={metric.color} strokeWidth={2.2} fill="url(#trendFill)" />
           </AreaChart>

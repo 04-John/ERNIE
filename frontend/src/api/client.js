@@ -124,3 +124,11 @@ export const createApiKey    = (name, mode) => api.post('/developer/keys', { nam
 export const revokeApiKey    = id => api.delete(`/developer/keys/${id}`).then(r => r.data)
 export const fetchApiUsage   = () => api.get('/developer/usage', { params: { days: 30 } }).then(r => r.data)
 export const startTopup      = usd => api.post('/developer/topup', { usd }).then(r => r.data)
+
+// ── List extras
+export const fetchSparklines = ids => api.get('/churn/sparklines', { params: { ids: ids.join(',') } }).then(r => r.data.data)
+
+export const restoreInsights = () => api.post('/intelligence/insights/restore').then(r => r.data)
+
+// ── Public price list (no login)
+export const fetchApiPricing = () => api.get('/v1/pricing').then(r => r.data)

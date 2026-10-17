@@ -826,7 +826,7 @@ flowchart TD
     PUB --> SS["#/status"]:::pub
 ```
 
-Design system: one token set (`frontend/src/index.css`) drives both themes. Dark is pitch black, light is a soft grey-white, and the brand is a lime-to-emerald gradient. The star-field and splash are pure canvas and CSS and respect reduced-motion settings.
+Design system: one token set (`frontend/src/index.css`) drives both themes. Dark is pitch black, light is a soft grey-white, and the brand is a lime-to-emerald gradient. Type is Bricolage Grotesque for display (16px and up) and Geist for everything else, with JetBrains Mono for data. The landing page is dark-only with a live "ledger lanes" canvas, a five-step scrollytelling section, an interactive copy of the real scoring model and an optional, off-by-default sound layer. Clicking any fintech anywhere in the app opens a right-hand drawer with its score, reasons and risk history. Splash, canvases and animations respect reduced-motion settings.
 
 ---
 
@@ -930,13 +930,15 @@ Open http://localhost:5173. With `DEBUG=true` the API docs are at http://localho
 |---|---|
 | Auth | `POST /auth/register` · `/auth/login` · `/auth/google` · `GET /auth/me` · password reset and email verification routes |
 | Workspace | `GET /workspace` · `PUT/DELETE /workspace/connection` · `/workspace/members` · `/workspace/invites` · `GET /workspace/audit` · `GET /workspace/export` · `DELETE /workspace` · `DELETE /account` |
+| Wallets | `GET /wallets/dormancy` · `GET /wallets/activity?status=active\|dormant\|never` · `activity-trend` |
 | Analytics | `GET /analytics/summary` · `monthly-volume` · `regional` · `type-breakdown` · `status` · `history` · `POST /analytics/refresh` |
-| Churn | `GET /churn/scores` · `high-risk` · `distribution` · `fintech/{id}` |
-| Intelligence | `GET /intelligence/insights` · `forecast` · `cohorts` · `health` · `POST /intelligence/insights/dismiss` |
+| Churn | `GET /churn/scores` (each row carries its one-line `top_reason`) · `high-risk` · `distribution` · `sparklines?ids=` · `fintech/{id}` |
+| Intelligence | `GET /intelligence/insights` · `forecast` · `cohorts` · `health` · `POST /intelligence/insights/dismiss` · `POST /intelligence/insights/restore` |
 | Alerts | `GET/POST /workspace/alerts/channels` · `PATCH/DELETE .../{id}` · `POST .../{id}/test` · `GET /workspace/alerts/events` |
 | Assistant | `GET /assistant/status` · `PUT /assistant/settings` · `POST /assistant/chat` · `POST /assistant/draft-outreach` |
 | Billing | `GET /billing/plans` (public) · `GET /billing` · `POST /billing/checkout` · `/billing/portal` · `/billing/webhook` (signature) |
 | Developer | `GET /developer` · `POST /developer/keys` · `DELETE /developer/keys/{id}` · `GET /developer/usage` · `POST /developer/topup` |
+| Public | `GET /v1/pricing` (the API price list, no key needed) |
 | Platform | `GET /admin/overview` · `/admin/workspaces` · `PATCH /admin/workspaces/{id}/plan` · public `GET /status` · `GET /health` |
 
 All of these except `/auth/*`, `/billing/plans`, `/billing/webhook`, `/status` and `/health` need a Bearer login token. The public `/v1/*` API uses API keys instead (section 9).

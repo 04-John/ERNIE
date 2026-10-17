@@ -18,6 +18,11 @@ const SOURCE_LABEL = {
   error: { tone: 'danger', text: 'Sync failed, no data loaded yet' },
 }
 
+const initialsOf = m => {
+  const parts = (m.name || m.email || '?').split(/[\s@._-]+/).filter(Boolean)
+  return ((parts[0]?.[0] || '?') + (parts[1]?.[0] || '')).toUpperCase()
+}
+
 function Row({ k, hint, children }) {
   return (
     <div className="kv-row">
@@ -75,7 +80,9 @@ function ConnectionCard() {
 
   return (
     <Card title="Blockradar connection" subtitle="The wallet this workspace analyses"
-      chip={conn?.connected ? 'Connected' : 'Not connected'}>
+      action={conn?.connected
+        ? <span className="sbadge tone-success"><i />Connected</span>
+        : <span className="chip">Not connected</span>}>
       {!conn?.connected ? (
         <>
           <div style={{ marginBottom: 16 }}>
@@ -101,7 +108,7 @@ function ConnectionCard() {
               ) : (
                 <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
                   Remove this connection and its data?
-                  <button className="btn btn-sm btn-danger" onClick={() => disconnect.mutate(undefined, { onSuccess: () => setConfirming(false) })} disabled={disconnect.isPending}>Yes, disconnect</button>
+                  <button className="btn btn-sm btn-danger-solid" onClick={() => disconnect.mutate(undefined, { onSuccess: () => setConfirming(false) })} disabled={disconnect.isPending}>Yes, disconnect</button>
                   <button className="btn btn-sm" onClick={() => setConfirming(false)}>Keep</button>
                 </span>
               )}
@@ -127,7 +134,7 @@ function InviteForm({ emailEnabled }) {
     e.preventDefault()
     create.mutate({ email: email.trim(), role, sendEmail: emailEnabled && sendEmail && Boolean(email.trim()) }, {
       onSuccess: inv => {
-        setCreated({ link: `${window.location.origin}/?invite=${inv.token}`, email: inv.email, emailed: inv.emailed, expires_at: inv.expires_at })
+        setCreated({ link: `${window.location.origin}/?invite=${inv.token}`, email: inv.email, emailed: inv.emailed, emailFailed: inv.email_failed, expires_at: inv.expires_at })
         setEmail(''); setCopied(false)
       },
     })
@@ -157,13 +164,21 @@ function InviteForm({ emailEnabled }) {
       )}
       {error && <Alert tone="danger">{error}</Alert>}
       {created && (
-        <Alert tone="success">
-          <div><strong>{created.emailed ? `Invite emailed to ${created.email}.` : 'Invite link created.'}</strong> {created.emailed ? 'You can also copy the link below. ' : 'Copy it now. '}It can't be shown again once you leave this page, works once, and expires {new Date(created.expires_at).toLocaleDateString()}.</div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+        <div className={`reveal ${created.emailFailed ? 'tone-warn' : 'tone-success'}`}>
+          <div style={{ fontSize: 13.5, lineHeight: 1.6, color: 'var(--text-2)' }}>
+            <b style={{ color: 'var(--text)' }}>
+              {created.emailed ? `Invite emailed to ${created.email}.`
+                : created.emailFailed ? `We couldn't email the invite to ${created.email}.`
+                : 'Invite link created.'}
+            </b>{' '}
+            {created.emailFailed ? 'The link still works: copy it below and send it yourself. ' : created.emailed ? 'You can also copy the link below. ' : 'Copy it now. '}
+            It can't be shown again once you leave this page, works once, and expires {new Date(created.expires_at).toLocaleDateString()}.
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <input className="input mono" readOnly value={created.link} onFocus={e => e.target.select()} style={{ flex: '1 1 260px', height: 38, fontSize: 12 }} aria-label="Invite link" />
             <button className="btn btn-sm" type="button" onClick={copy} style={{ height: 38 }}>{copied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy</>}</button>
           </div>
-        </Alert>
+        </div>
       )}
     </div>
   )
@@ -183,40 +198,34 @@ function TeamCard({ emailEnabled }) {
   return (
     <Card title="Team" subtitle="People in this workspace" chip={`${members.length} member${members.length === 1 ? '' : 's'}`}>
       {actionError && <div style={{ marginBottom: 12 }}><Alert tone="danger">{actionError}</Alert></div>}
-      <div className="table-wrap">
-        <table className="table">
-          <thead><tr><th>Name</th><th>Role</th><th>Last sign-in</th>{isAdmin && <th />}</tr></thead>
-          <tbody>
-            {members.map(m => (
-              <tr key={m.id}>
-                <td>
-                  <div style={{ fontWeight: 600 }}>{m.name || m.email} {m.is_you && <span className="chip" style={{ marginLeft: 6 }}>You</span>}</div>
-                  <div className="hint">{m.email}</div>
-                </td>
-                <td>
-                  {isAdmin && !m.is_you ? (
-                    <select className="input" value={m.role} aria-label={`Role for ${m.email}`} style={{ height: 34, width: 120 }}
-                      onChange={e => setRole.mutate({ id: m.id, role: e.target.value })}>
-                      <option value="member">Member</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                  ) : <Badge tone={m.role === 'admin' ? 'accent' : 'neutral'}>{m.role}</Badge>}
-                </td>
-                <td style={{ color: 'var(--text-2)' }}>{m.last_login ? timeAgo(m.last_login) : '—'}</td>
-                {isAdmin && (
-                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                    {!m.is_you && (removing === m.id ? (
-                      <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-                        <button className="btn btn-sm btn-danger" onClick={() => remove.mutate(m.id, { onSettled: () => setRemoving(null) })}>Remove</button>
-                        <button className="btn btn-sm" onClick={() => setRemoving(null)}>Cancel</button>
-                      </span>
-                    ) : <button className="btn btn-sm btn-ghost" onClick={() => setRemoving(m.id)} aria-label={`Remove ${m.email}`}><Trash2 size={14} /></button>)}
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div>
+        {members.map(m => (
+          <div key={m.id} className="member-row">
+            <span className="avatar" style={{ width: 32, height: 32, fontSize: 12, background: m.is_you ? 'var(--brand-grad)' : 'var(--surface-hover)', color: m.is_you ? 'var(--accent-contrast)' : 'var(--text-2)' }}>{initialsOf(m)}</span>
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{m.name || m.email} {m.is_you && <span className="chip" style={{ marginLeft: 6 }}>You</span>}</div>
+              <div className="hint">{m.email}</div>
+            </div>
+            {isAdmin && !m.is_you ? (
+              <select className="input" value={m.role} aria-label={`Role for ${m.email}`} style={{ height: 34, width: 120, fontSize: 13 }}
+                onChange={e => setRole.mutate({ id: m.id, role: e.target.value })}>
+                <option value="member">Member</option>
+                <option value="admin">Admin</option>
+              </select>
+            ) : <span className={`sbadge ${m.role === 'admin' ? 'tone-accent' : 'tone-neutral'}`}>{m.role}</span>}
+            <span className="hint" style={{ width: 96, textAlign: 'right', fontSize: 12.5 }}>{m.last_login ? timeAgo(m.last_login) : '—'}</span>
+            {isAdmin && (
+              <span style={{ minWidth: 112, textAlign: 'right' }}>
+                {!m.is_you && (removing === m.id ? (
+                  <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                    <button className="btn btn-sm btn-danger-solid" onClick={() => remove.mutate(m.id, { onSettled: () => setRemoving(null) })}>Remove</button>
+                    <button className="btn btn-sm" onClick={() => setRemoving(null)}>Cancel</button>
+                  </span>
+                ) : <button className="btn btn-sm btn-ghost btn-danger" onClick={() => setRemoving(m.id)} aria-label={`Remove ${m.email}`}>Remove</button>)}
+              </span>
+            )}
+          </div>
+        ))}
       </div>
 
       {isAdmin ? (
@@ -226,12 +235,12 @@ function TeamCard({ emailEnabled }) {
               <div className="stat-label" style={{ marginBottom: 8 }}>Pending invites</div>
               <div style={{ display: 'grid', gap: 8 }}>
                 {invites.map(i => (
-                  <div key={i.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)', flexWrap: 'wrap' }}>
+                  <div key={i.id} className="invite-row">
                     <div style={{ flex: 1, minWidth: 180, fontSize: 13 }}>
                       <strong>{i.email || 'Anyone with the link'}</strong>
                       <span className="hint"> · {i.role} · expires {new Date(i.expires_at).toLocaleDateString()}</span>
                     </div>
-                    <button className="btn btn-sm btn-danger" onClick={() => revoke.mutate(i.id)} disabled={revoke.isPending}>Revoke</button>
+                    <button className="btn btn-sm btn-danger-solid" style={{ background: 'transparent' }} onClick={() => revoke.mutate(i.id)} disabled={revoke.isPending}>Revoke</button>
                   </div>
                 ))}
               </div>
@@ -308,24 +317,23 @@ function ChannelRow({ ch }) {
   const testResult = test.data
 
   return (
-    <div style={{ padding: '14px 16px', borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--border)', opacity: ch.enabled ? 1 : 0.65 }}>
+    <div className="channel-row" style={{ opacity: ch.enabled ? 1 : 0.65 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <span className="stat-icon tone-neutral" style={{ width: 36, height: 36, borderRadius: 10 }}><Icon size={17} /></span>
+        <span className="glyph tone-neutral" style={{ width: 36, height: 36, background: 'var(--surface-hover)', color: 'var(--text-2)' }}><Icon size={17} /></span>
         <div style={{ flex: 1, minWidth: 180 }}>
-          <div style={{ fontWeight: 600, fontSize: 14 }}>{ch.label} <Badge tone={status.tone} dot>{ch.enabled ? status.text : 'Paused'}</Badge></div>
+          <div style={{ fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>{ch.label} <span className={`sbadge tone-${ch.enabled ? status.tone : 'neutral'}`} style={{ fontSize: 10.5, padding: '2px 8px' }}><i />{ch.enabled ? status.text : 'Paused'}</span></div>
           <div className="hint mono" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{ch.hint}</div>
         </div>
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-2)' }}>
-          <input type="checkbox" checked={ch.enabled} onChange={e => toggle.mutate({ id: ch.id, enabled: e.target.checked })} /> On
-        </label>
+        <button type="button" role="switch" className="switch" aria-checked={ch.enabled} aria-label={`${ch.enabled ? 'Pause' : 'Turn on'} ${ch.label}`}
+          onClick={() => toggle.mutate({ id: ch.id, enabled: !ch.enabled })} />
         <button className="btn btn-sm" onClick={() => test.mutate(ch.id)} disabled={test.isPending}>
           {test.isPending ? <Loader2 size={14} className="spin" /> : <Send size={14} />} Send test
         </button>
         {!confirming ? (
-          <button className="btn btn-sm btn-ghost" onClick={() => setConfirming(true)} aria-label={`Remove ${ch.label}`}><Trash2 size={14} /></button>
+          <button className="btn btn-sm btn-ghost btn-danger" onClick={() => setConfirming(true)} aria-label={`Remove ${ch.label}`}><Trash2 size={14} /></button>
         ) : (
           <span style={{ display: 'inline-flex', gap: 6 }}>
-            <button className="btn btn-sm btn-danger" onClick={() => remove.mutate(ch.id)}>Remove</button>
+            <button className="btn btn-sm btn-danger-solid" onClick={() => remove.mutate(ch.id)}>Remove</button>
             <button className="btn btn-sm" onClick={() => setConfirming(false)}>Cancel</button>
           </span>
         )}
@@ -394,7 +402,7 @@ export default function SettingsPage({ user, theme, setTheme, onLogout }) {
   const busy = refresh.isPending || s?.refreshing
 
   return (
-    <div className="stack" style={{ maxWidth: 860 }}>
+    <div className="stack" style={{ maxWidth: 880 }}>
       <PageHeader eyebrow="Settings" title="Account &amp; workspace">
         Your profile, workspace, data connection and appearance.
       </PageHeader>
@@ -429,7 +437,7 @@ export default function SettingsPage({ user, theme, setTheme, onLogout }) {
       }>
         {refresh.isError && <div style={{ marginBottom: 12 }}><Alert tone="warn">{refresh.error?.response?.data?.detail || 'Refresh failed.'}</Alert></div>}
         <div className="kv">
-          <Row k="Source"><Badge tone={src.tone} dot>{src.text}</Badge></Row>
+          <Row k="Source"><span className={`sbadge tone-${src.tone}`}><i />{src.text}</span></Row>
           <Row k="Last updated">{s?.last_refreshed ? `${timeAgo(s.last_refreshed)} · ${new Date(s.last_refreshed).toLocaleString()}` : '—'}</Row>
           <Row k="Auto-refresh">{s ? `Every ${s.refresh_interval_hours} hours` : '—'}</Row>
           <Row k="Wallets / fintechs / transactions">{s ? `${fmtNum(s.total_wallets)} / ${fmtNum(s.total_fintechs)} / ${fmtNum(s.total_transactions)}` : '—'}</Row>

@@ -10,6 +10,7 @@ const LABELS = {
   'invite.revoked': 'Invitation revoked', 'member.role_changed': 'Role changed', 'member.removed': 'Member removed', 'member.left': 'Member left',
   'alert_channel.added': 'Alert channel added', 'alert_channel.toggled': 'Alert channel changed', 'alert_channel.removed': 'Alert channel removed',
   'ai.enabled': 'Ask ERNIE turned on', 'ai.disabled': 'Ask ERNIE turned off', 'plan.changed': 'Plan changed', 'workspace.exported': 'Data exported',
+  'api_key.created': 'API key created', 'api_key.revoked': 'API key revoked', 'credits.added': 'API credits added', 'invite.email_failed': 'Invite email failed',
 }
 
 /** Admin-only record of who changed what. */
@@ -61,7 +62,7 @@ function DeleteForm({ title, warning, confirmLabel, confirmValue, needsPassword,
       )}
       {error && <Alert tone="danger">{error}</Alert>}
       <div style={{ display: 'flex', gap: 10 }}>
-        <button className="btn btn-danger" type="submit" disabled={!ok || busy}>{busy ? <Loader2 size={15} className="spin" /> : <Trash2 size={15} />} Delete permanently</button>
+        <button className="btn btn-danger-solid" type="submit" disabled={!ok || busy}>{busy ? <Loader2 size={15} className="spin" /> : <Trash2 size={15} />} Delete permanently</button>
         <button className="btn" type="button" onClick={onCancel} disabled={busy}>Cancel</button>
       </div>
     </form>

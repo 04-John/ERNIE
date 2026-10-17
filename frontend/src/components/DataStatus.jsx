@@ -1,39 +1,27 @@
 import { RefreshCw } from 'lucide-react'
 import { useStatus, useRefresh } from '../hooks/useAnalytics'
-import { Badge } from './ui'
 import { timeAgo } from '../lib/format'
+import { syncChip, isSyncing } from '../lib/sync'
 
-const SOURCE = {
-  real:                 { tone: 'success', label: 'Live · Blockradar', live: true },
-  simulated:            { tone: 'warn',    label: 'Demo data' },
-  syncing:              { tone: 'info',    label: 'Syncing your wallet…' },
-  error:                { tone: 'danger',  label: 'Sync failed' },
-}
-
-/** Shows where the data comes from, how fresh it is, and lets the user re-sync. */
-export default function DataStatus({ compact = false }) {
+/** Where the data comes from, how fresh it is, and a button to re-sync. */
+export default function DataStatus() {
   const { data: status } = useStatus()
   const refresh = useRefresh()
-
-  const src = SOURCE[status?.data_source] || { tone: 'neutral', label: 'Connecting…' }
-  const busy = refresh.isPending || status?.refreshing
+  const chip = syncChip(status)
+  const busy = refresh.isPending || isSyncing(status)
   const error = refresh.error?.response?.data?.detail
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <Badge tone={src.tone} dot live={src.live}>
-        <span className={compact ? 'hide-sm' : undefined}>{src.label}</span>
-        {compact && <span className="hide-sm" style={{ opacity: .7 }}> · {timeAgo(status?.last_refreshed)}</span>}
-      </Badge>
-      <button
-        className="btn btn-icon"
-        onClick={() => refresh.mutate()}
-        disabled={busy}
-        aria-label="Refresh data now"
-        title={error || `Last updated ${timeAgo(status?.last_refreshed)} · click to re-sync`}
-      >
-        <RefreshCw size={15} className={busy ? 'spin' : undefined} />
+    <>
+      <div className="sync-chip hide-sm" role="status">
+        <span className="sync-dot" style={{ background: chip.dot, boxShadow: `0 0 10px ${chip.dot}` }} />
+        {chip.label}
+      </div>
+      <button className="btn btn-sm refresh-btn" onClick={() => refresh.mutate()} disabled={busy || status?.data_source === 'simulated'}
+        aria-label="Refresh data now" title={error || `Last updated ${timeAgo(status?.last_refreshed)} · click to re-sync`}>
+        <RefreshCw size={14} style={{ transform: `rotate(${busy ? 720 : 0}deg)`, transition: 'transform 2.4s cubic-bezier(.4,0,.2,1)' }} />
+        <span className="hide-sm">Refresh</span>
       </button>
-    </div>
+    </>
   )
 }

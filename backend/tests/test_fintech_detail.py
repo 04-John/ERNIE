@@ -89,3 +89,46 @@ def test_history_is_deleted_with_the_connection(client):
     client.delete("/workspace/connection", headers=h)
     with SessionLocal() as db:
         assert db.query(FintechDaily).filter_by(org_id=org).count() == 0
+
+
+# ───────────────────────── list rows: top reason and sparklines ─────────────────────────
+
+def test_list_rows_carry_one_line_reason_without_the_heavy_breakdown(client):
+    h = register(client)
+    connect(client, h)
+    rows = client.get("/churn/scores", headers=h).json()["data"]
+    full = detail(client, h, rows[0]["fintech_id"]).json()["fintech"]
+    best = max((b for b in full["breakdown"] if b["points"] > 0), key=lambda b: b["points"])
+    assert rows[0]["top_reason"] == best["detail"] and "breakdown" not in rows[0]
+    assert all("top_reason" in r for r in client.get("/churn/high-risk", headers=h).json()["data"])
+
+
+def seed_history(org_id, fintech_id, probs):
+    today = datetime.now(timezone.utc).date()
+    with SessionLocal() as db:
+        for i, p in enumerate(probs):
+            db.add(FintechDaily(org_id=org_id, fintech_id=fintech_id, day=today - timedelta(days=len(probs) - i), fintech_name="x",
+                                risk="Low", probability=p, total_volume_usd=0, transactions=0, days_since_last_tx=0))
+        db.commit()
+
+
+def test_sparklines_are_scoped_ordered_and_capped(client, fake):
+    a, b = register(client), register(client)
+    connect(client, a)
+    connect(client, b, KEY_B, WALLET_B)
+    org_a = client.get("/workspace", headers=a).json()["workspace"]["id"]
+    org_b = client.get("/workspace", headers=b).json()["workspace"]["id"]
+    seed_history(org_a, "a-a0", [0.2, 0.4, 0.6])
+    seed_history(org_b, "a-a0", [0.9, 0.9, 0.9])                       # same fintech id, another workspace
+    got = client.get("/churn/sparklines?ids=a-a0,nope", headers=a).json()["data"]
+    assert got["a-a0"][:3] == [0.2, 0.4, 0.6] and "nope" not in got    # oldest first (today's real score comes last); the other workspace's 0.9s never leak in
+    assert 0.9 not in got["a-a0"]
+    assert client.get("/churn/sparklines?ids=a-a0", headers=b).json()["data"]["a-a0"][:3] == [0.9, 0.9, 0.9]
+    many = ",".join(f"id{i}" for i in range(50))
+    assert client.get(f"/churn/sparklines?ids={many}", headers=a).status_code == 200
+    assert client.get("/churn/sparklines?ids=a-a0").status_code == 401
+
+
+def test_sparklines_are_empty_for_the_demo_dataset(client):
+    h = register(client)
+    assert client.get("/churn/sparklines?ids=anything", headers=h).json() == {"data": {}}

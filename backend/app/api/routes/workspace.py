@@ -172,7 +172,7 @@ def list_invites(user: User = Depends(require_admin), db: Session = Depends(get_
 
 
 @router.post("/invites", dependencies=[Depends(rate_limit_auth)])
-def new_invite(req: InviteRequest, background: BackgroundTasks, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+async def new_invite(req: InviteRequest, user: User = Depends(require_admin), db: Session = Depends(get_db)):
     if req.role not in VALID_ROLES:
         raise HTTPException(status_code=400, detail="Role must be 'admin' or 'member'.")
     org = db.query(Organization).filter(Organization.id == user.org_id).first()
@@ -183,16 +183,18 @@ def new_invite(req: InviteRequest, background: BackgroundTasks, user: User = Dep
         raise HTTPException(status_code=400, detail="That email already has an ERNIE account.")
     invite, token = create_invite(db, user.org_id, user.id, req.email, req.role)
     audit.record(db, user.org_id, user, "invite.created", f"Invited {invite.email or 'anyone with the link'} as {invite.role}")
-    emailed = False
+    emailed, email_failed = False, False
     if req.send_email and invite.email and mailer.email_enabled():
-        org = db.query(Organization).filter(Organization.id == user.org_id).first()
         subject, text, html = mailer.invite_email(
             f"{settings.app_base_url}/?invite={token}", org.name if org else "a workspace", user.name or user.email, invite.role)
-        background.add_task(mailer.send_email, invite.email, subject, text, html)
-        emailed = True
+        # sent now, not in the background, so the admin is told the truth: the provider can refuse (for example an unverified sender domain)
+        emailed = await mailer.send_email(invite.email, subject, text, html)
+        email_failed = not emailed
+        if email_failed:
+            audit.record(db, user.org_id, "system", "invite.email_failed", f"Could not email the invitation to {invite.email}")
     # the token is returned ONCE, here; only its hash is stored
     return {"id": invite.id, "token": token, "email": invite.email, "role": invite.role,
-            "expires_at": invite.expires_at.isoformat() + "Z", "emailed": emailed}
+            "expires_at": invite.expires_at.isoformat() + "Z", "emailed": emailed, "email_failed": email_failed}
 
 
 @router.delete("/invites/{invite_id}")

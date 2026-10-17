@@ -3,6 +3,7 @@ Intelligence Routes
 ===================
 GET  /intelligence/insights          prioritised findings (with evidence and a recommended action)
 POST /intelligence/insights/dismiss  hide a finding until the situation changes
+POST /intelligence/insights/restore  bring back everything that was dismissed
 GET  /intelligence/forecast          30-day volume forecast (+ anomalies)
 GET  /intelligence/cohorts           wallet activation / retention by creation month
 GET  /intelligence/health            0-100 retention health score and its components
@@ -27,8 +28,9 @@ class DismissRequest(BaseModel):
 @router.get("/insights")
 async def get_insights(ctx: OrgCtx = Depends(org_ctx)):
     if ctx.key == DEMO_KEY:
-        return {"data": [{**i, "dismissable": False} for i in ctx.state.get("insights", [])], "demo": True}
-    return {"data": await asyncio.to_thread(sync.load_active_insights, ctx.key), "demo": False}
+        return {"data": [{**i, "dismissable": False} for i in ctx.state.get("insights", [])], "demo": True, "dismissed": 0}
+    data, dismissed = await asyncio.gather(asyncio.to_thread(sync.load_active_insights, ctx.key), asyncio.to_thread(sync.count_dismissed, ctx.key))
+    return {"data": data, "demo": False, "dismissed": dismissed}
 
 
 @router.post("/insights/dismiss")
@@ -38,6 +40,13 @@ async def dismiss(req: DismissRequest, ctx: OrgCtx = Depends(org_ctx)):
     if not await asyncio.to_thread(sync.dismiss_insight, ctx.key, req.key):
         raise HTTPException(status_code=404, detail="Insight not found.")
     return {"dismissed": True}
+
+
+@router.post("/insights/restore")
+async def restore(ctx: OrgCtx = Depends(org_ctx)):
+    if ctx.key == DEMO_KEY:
+        raise HTTPException(status_code=400, detail="Demo insights can't be dismissed, so there is nothing to bring back.")
+    return {"restored": await asyncio.to_thread(sync.restore_dismissed, ctx.key)}
 
 
 @router.get("/forecast")

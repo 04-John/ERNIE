@@ -3,7 +3,6 @@ import { Bell, AlertTriangle, PauseCircle, WifiOff, Info, CheckCircle2, Hourglas
 import { useStatus, useSummary, useHighRisk, useAlertEvents } from '../hooks/useAnalytics'
 import { timeAgo } from '../lib/format'
 
-const ICON = { danger: AlertTriangle, warn: PauseCircle, info: Info, success: CheckCircle2 }
 const EVENT_TONE = { high_risk: 'danger', recovered: 'success', sync_failed: 'warn' }
 
 /** Alerts are derived from live data: nothing here is hard-coded. */
@@ -57,17 +56,17 @@ export default function Notifications() {
 
   return (
     <div className="popover-anchor" ref={ref}>
-      <button className="btn btn-icon" style={{ position: 'relative' }} onClick={() => setOpen(o => !o)}
+      <button className="btn btn-icon" style={{ position: 'relative', borderColor: open ? 'var(--emerald)' : undefined }} onClick={() => setOpen(o => !o)}
         aria-label={`Alerts${urgent ? `, ${urgent} need attention` : ''}`} aria-expanded={open}>
         <Bell size={16} />
         {urgent > 0 && <span className="dot-badge" />}
       </button>
 
       {open && (
-        <div className="popover" role="dialog" aria-label="Alerts">
+        <div className="popover" role="dialog" aria-label="Alerts" style={{ width: 380 }}>
           <div className="popover-head">
-            <strong style={{ fontSize: 14 }}>Alerts</strong>
-            <span className="hint">Synced {timeAgo(status?.last_refreshed)}</span>
+            <strong className="display" style={{ fontSize: 15, fontWeight: 700 }}>Alerts</strong>
+            <span className="mono" style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }}>Synced {timeAgo(status?.last_refreshed)}</span>
           </div>
           {alerts.length === 0 ? (
             <div className="popover-item" style={{ alignItems: 'center' }}>
@@ -75,29 +74,25 @@ export default function Notifications() {
               <div style={{ fontSize: 13, color: 'var(--text-2)' }}>All clear. Nothing needs your attention right now.</div>
             </div>
           ) : alerts.map(a => {
-            const Icon = a.icon || ICON[a.tone]
+            const Icon = a.icon
             return (
               <div className="popover-item" key={a.title}>
-                <span className={`stat-icon tone-${a.tone}`} style={{ width: 32, height: 32, borderRadius: 9, flexShrink: 0 }}><Icon size={15} /></span>
-                <div>
+                <span className={`glyph sm tone-${a.tone}`}><Icon size={15} /></span>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600 }}>{a.title}</div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{a.text}</div>
+                  <div style={{ fontSize: 12, lineHeight: 1.5, color: 'var(--muted)', marginTop: 2 }}>{a.text}</div>
                 </div>
               </div>
             )
           })}
           {events.length > 0 && (
             <>
-              <div className="popover-head" style={{ background: 'var(--surface-2)' }}>
-                <strong style={{ fontSize: 12, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--muted)' }}>Recent activity</strong>
-              </div>
-              <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+              <div className="popover-bar">RECENT ACTIVITY</div>
+              <div style={{ maxHeight: 240, overflowY: 'auto' }}>
                 {events.slice(0, 12).map(e => (
-                  <div className="popover-item" key={e.id} style={{ padding: '10px 16px' }}>
-                    <span className={`stat-icon tone-${EVENT_TONE[e.kind] || 'neutral'}`} style={{ width: 28, height: 28, borderRadius: 8, flexShrink: 0 }}>
-                      {e.kind === 'recovered' ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
-                    </span>
-                    <div style={{ minWidth: 0 }}>
+                  <div className="popover-item" key={e.id} style={{ padding: '11px 16px' }}>
+                    <span className="event-dot" style={{ background: `var(--${EVENT_TONE[e.kind] || 'muted'})` }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>{e.title}</div>
                       <div style={{ fontSize: 12, color: 'var(--muted)' }}>{timeAgo(e.created_at)}{e.detail ? ` · ${e.detail}` : ''}</div>
                     </div>
@@ -106,6 +101,7 @@ export default function Notifications() {
               </div>
             </>
           )}
+          <a href="#/insights" className="popover-link" onClick={() => setOpen(false)}>Open Insights →</a>
         </div>
       )}
     </div>

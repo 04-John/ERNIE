@@ -155,6 +155,7 @@ def set_plan(client, headers, plan):
 class Mailbox(list):
     """Captures outgoing email. `enabled` toggles whether the server believes email is configured."""
     enabled = True
+    fail = False          # simulate the provider refusing to deliver
 
 
 @pytest.fixture()
@@ -163,6 +164,8 @@ def mailbox(monkeypatch):
     box = Mailbox()
 
     async def capture(to, subject, text, html=None):
+        if box.fail:
+            return False
         box.append({"to": to, "subject": subject, "text": text, "html": html})
         return True
 

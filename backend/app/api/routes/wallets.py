@@ -65,9 +65,10 @@ async def get_dormancy(
 async def get_wallet_activity(
     ctx: OrgCtx = Depends(org_ctx),
     fintech_id: Optional[str] = Query(default=None),
+    status: Optional[str] = Query(default=None, pattern="^(active|dormant|never)$", description="Filter by wallet status"),
     limit: int = Query(default=100, ge=1, le=1000),
 ):
-    """Raw wallet activity — filterable by fintech."""
+    """Raw wallet activity — filterable by fintech and by status (active, dormant, never active)."""
     raw = ctx.state.get("raw", {})
     addresses = raw.get("addresses", [])
     if not addresses:
@@ -77,6 +78,11 @@ async def get_wallet_activity(
 
     if fintech_id:
         df = df[df["_fintechId"] == fintech_id]
+
+    if status:
+        never = df["neverActive"].fillna(False).astype(bool) if "neverActive" in df.columns else pd.Series(False, index=df.index)
+        dormant = df["isDormant"].fillna(False).astype(bool) & ~never
+        df = df[never] if status == "never" else df[dormant] if status == "dormant" else df[~never & ~dormant]
 
     cols = [
         "id", "_fintechId", "_fintechName", "_region", "_country",

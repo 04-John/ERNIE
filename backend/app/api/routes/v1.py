@@ -7,6 +7,7 @@ GET /v1/fintechs             your fintechs ranked by churn risk (filter, paginat
 GET /v1/fintechs/{id}        one fintech: score, risk, and the reasons behind it
 GET /v1/history?days=        daily headline metrics for charts
 GET /v1/usage                your balance and prices (always free)
+GET /v1/pricing              the price list. Public: no key needed (the marketing site reads it)
 
 Authentication: `Authorization: Bearer ernie_live_...` (your data, billed) or `ernie_test_...` (demo data, free).
 Every billed response carries X-Credits-Charged and X-Credits-Remaining. Errors are never billed.
@@ -108,6 +109,12 @@ def public_fintech(row: dict, detail: bool = False) -> dict:
         out["score_breakdown"] = [{"signal": b.get("label"), "weight": b.get("weight"), "contribution": b.get("points"), "detail": b.get("detail")}
                                   for b in (row.get("breakdown") or [])]
     return out
+
+
+@router.get("/pricing")
+async def pricing():
+    """The public price list, so the website and the server can never disagree."""
+    return apiaccess.public_pricing()
 
 
 @router.get("/usage")

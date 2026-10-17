@@ -1,8 +1,10 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { LayoutDashboard, BarChart3, Wallet, Code2, Settings, LogOut, Menu, Sun, Moon, ChevronDown, Lightbulb, Sparkles, ShieldCheck } from 'lucide-react'
+import { LayoutDashboard, BarChart3, Wallet, Code2, Settings, LogOut, Menu, Sun, Moon, Lightbulb, Sparkles, ShieldCheck } from 'lucide-react'
 import Logo from '../components/Logo'
 import DataStatus from '../components/DataStatus'
+import FintechDrawerProvider from '../components/FintechDrawer'
+import { isSyncing } from '../lib/sync'
 import Notifications from '../components/Notifications'
 import { Skeleton, Alert } from '../components/ui'
 import { resendVerification } from '../api/client'
@@ -80,39 +82,6 @@ function NavLink({ item, active, onNavigate, badge }) {
   )
 }
 
-function UserMenu({ user, onLogout }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef(null)
-  useEffect(() => {
-    if (!open) return
-    const onDown = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    const onKey = e => { if (e.key === 'Escape') setOpen(false) }
-    document.addEventListener('mousedown', onDown)
-    document.addEventListener('keydown', onKey)
-    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
-  }, [open])
-
-  return (
-    <div className="popover-anchor" ref={ref}>
-      <button className="btn" style={{ padding: '0 8px 0 4px', gap: 8, height: 38 }} onClick={() => setOpen(o => !o)}
-        aria-haspopup="menu" aria-expanded={open} aria-label="Account menu">
-        <span className="avatar" style={{ width: 28, height: 28, fontSize: 11 }}>{initials(user)}</span>
-        <ChevronDown size={14} className="hide-sm" />
-      </button>
-      {open && (
-        <div className="popover" role="menu" style={{ width: 260 }}>
-          <div className="popover-head" style={{ display: 'block' }}>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>{user?.name || 'Your account'}</div>
-            <div className="hint" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.email}</div>
-          </div>
-          <a href="#/settings" className="menu-item" role="menuitem" onClick={() => setOpen(false)}><Settings size={16} /> Settings</a>
-          <button className="menu-item" role="menuitem" onClick={onLogout}><LogOut size={16} /> Sign out</button>
-        </div>
-      )}
-    </div>
-  )
-}
-
 // When a background sync finishes, reload every view so it shows the freshly synced data
 function useSyncWatcher() {
   const { data } = useStatus()
@@ -129,6 +98,7 @@ export default function Dashboard({ theme, setTheme, user, onLogout }) {
   useSyncWatcher()
   const { id: route, param } = useRoute()
   const { data: insightData } = useInsights()
+  const { data: syncStatus } = useStatus()
   const attention = (insightData?.data || []).filter(i => i.severity === 'critical' || i.severity === 'warning').length
   const [drawer, setDrawer] = useState(false)
   const navId = route === 'fintech' ? 'analytics' : route          // a fintech page lives under Analytics
@@ -145,10 +115,11 @@ export default function Dashboard({ theme, setTheme, user, onLogout }) {
   const Page = { overview: Overview, insights: Insights, assistant: Assistant, analytics: Analytics, wallets: Wallets, developers: Developers, settings: SettingsPage, fintech: FintechDetail, admin: Admin }[route]
 
   return (
+    <FintechDrawerProvider>
     <div className="shell">
       <div className={`sidebar-backdrop ${drawer ? 'open' : ''}`} onClick={closeDrawer} aria-hidden="true" />
       <aside className={`sidebar ${drawer ? 'open' : ''}`} aria-label="Primary">
-        <div style={{ padding: '4px 8px 8px' }}><Logo size={36} tagline /></div>
+        <a href="#/overview" className="side-logo" aria-label="ERNIE overview"><Logo size={34} tagline /></a>
 
         <div className="sidebar-section">Workspace</div>
         <nav className="nav">
@@ -158,17 +129,15 @@ export default function Dashboard({ theme, setTheme, user, onLogout }) {
         <div className="sidebar-foot">
           <nav className="nav">
             {[...(user?.platform_admin ? [ADMIN] : []), ...BOTTOM].map(item => <NavLink key={item.id} item={item} active={navId === item.id} onNavigate={closeDrawer} />)}
-            <button className="nav-item btn-danger" style={{ width: '100%', textAlign: 'left' }} onClick={onLogout}>
-              <LogOut size={18} strokeWidth={1.8} /> Sign out
-            </button>
           </nav>
           {user && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 8px 0' }}>
+            <div className="side-user">
               <span className="avatar">{initials(user)}</span>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.name || user.email}</div>
-                <div className="hint" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.workspace || user.company || user.email}</div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div className="side-user-name">{user.name || user.email}</div>
+                <div className="side-user-sub">{[user.workspace || user.company, user.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : null].filter(Boolean).join(' · ') || user.email}</div>
               </div>
+              <button className="btn btn-icon btn-ghost" style={{ width: 30, height: 30 }} onClick={onLogout} aria-label="Sign out" title="Sign out"><LogOut size={15} /></button>
             </div>
           )}
         </div>
@@ -182,15 +151,15 @@ export default function Dashboard({ theme, setTheme, user, onLogout }) {
             <strong className="menu-btn" style={{ fontSize: 15 }}>{current?.label}</strong>
           </div>
           <div className="topbar-right">
-            <DataStatus compact />
+            <DataStatus />
             <button className="btn btn-icon" onClick={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))}
               aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}>
               {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
             </button>
             <Notifications />
-            <UserMenu user={user} onLogout={onLogout} />
           </div>
         </header>
+        <div className="topbar-progress" aria-hidden="true">{isSyncing(syncStatus) && <i />}</div>
 
         <main className="content" id="main">
           <VerifyBanner user={user} />
@@ -200,5 +169,6 @@ export default function Dashboard({ theme, setTheme, user, onLogout }) {
         </main>
       </div>
     </div>
+    </FintechDrawerProvider>
   )
 }

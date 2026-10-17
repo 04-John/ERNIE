@@ -1,20 +1,24 @@
-import { DollarSign, Wallet, PauseCircle, AlertTriangle } from 'lucide-react'
-import { useSummary, useStatus, useInsights } from '../hooks/useAnalytics'
-import { PageHeader, StatCard, Alert } from '../components/ui'
+import { useSummary, useStatus, useDistribution } from '../hooks/useAnalytics'
+import { PageHeader, StatCard, CountUp } from '../components/ui'
 import VolumeChart from '../components/VolumeChart'
-import ChurnDonut from '../components/ChurnDonut'
 import TypeBars from '../components/TypeBars'
-import RegionalCards from '../components/RegionalCards'
-import TopRiskList from '../components/TopRiskList'
 import HealthCard from '../components/HealthCard'
-import { InsightList } from '../components/Insights'
+import NeedsAttention from '../components/NeedsAttention'
 import { fmtNum, fmtUsd, fmtPct } from '../lib/format'
+
+function Banner({ tone, glyph, title, children }) {
+  return (
+    <div className={`banner tone-${tone}`} role={tone === 'danger' ? 'alert' : 'status'}>
+      <span className="banner-glyph">{glyph}</span>
+      <div style={{ flex: 1, minWidth: 0 }}><b>{title}</b> {children}</div>
+    </div>
+  )
+}
 
 export default function Overview({ user }) {
   const { data: s = {}, isLoading } = useSummary()
   const { data: status } = useStatus()
-  const { data: ins } = useInsights()
-  const top = (ins?.data || []).filter(i => i.kind !== 'getting_started' || true).slice(0, 3)
+  const { data: dist = {} } = useDistribution()
   const first = (user?.name || '').split(' ')[0]
 
   const noActivity = status?.data_source === 'real' && s.total_transactions === 0
@@ -28,73 +32,60 @@ export default function Overview({ user }) {
       </PageHeader>
 
       {syncing && (
-        <Alert tone="info">
-          <strong>Syncing your Blockradar wallet.</strong> The first sync reads your full history and can take a minute on a busy wallet.
-          This page updates by itself when it finishes.
-        </Alert>
+        <Banner tone="info" glyph="↻" title="Syncing your Blockradar wallet.">
+          The first sync reads your full history and can take a minute on a busy wallet. This page updates by itself when it finishes.
+        </Banner>
       )}
 
       {status?.history_truncated && (
-        <Alert tone="warn">
-          <strong>Very large wallet.</strong> ERNIE stored the most recent 40,000 transactions. Older history isn't included in the analytics.
-        </Alert>
+        <Banner tone="warn" glyph="!" title="Very large wallet.">
+          ERNIE stored the most recent 40,000 transactions. Older history isn't included in the analytics.
+        </Banner>
       )}
 
       {isDemo && (
-        <Alert tone="warn">
-          <strong>You're viewing demo data.</strong> Connect your Blockradar wallet to see your own fintechs, volume and churn risk.{' '}
-          <a href="#/settings" className="link">Connect Blockradar →</a>
-        </Alert>
+        <Banner tone="warn" glyph="!" title="You're viewing demo data.">
+          Connect your Blockradar wallet to see your own fintechs, volume and churn risk.{' '}
+          <a href="#/settings" className="link-btn">Connect Blockradar →</a>
+        </Banner>
       )}
 
       {status?.last_error && !syncing && (
-        <Alert tone="danger">
-          <strong>Blockradar sync failed.</strong> {status.data_source === 'error' ? 'No data has loaded yet.' : 'Showing your last good data.'}{' '}
-          {status.last_error} <a href="#/settings" className="link">Check connection →</a>
-        </Alert>
+        <Banner tone="danger" glyph="×" title="Blockradar sync failed.">
+          {status.data_source === 'error' ? 'No data has loaded yet.' : 'Showing your last good data.'} {status.last_error}{' '}
+          <a href="#/settings" className="link-btn">Check connection →</a>
+        </Banner>
       )}
 
       {noActivity && (
-        <Alert tone="info">
-          <strong>Connected, but no transactions yet.</strong> Your Blockradar wallet has {fmtNum(s.total_wallets)} address{s.total_wallets === 1 ? '' : 'es'} and
-          no successful transactions. Churn scores, volume and dormancy fill in automatically after the first deposits or withdrawals.
-        </Alert>
+        <Banner tone="info" glyph="i" title="Connected, but no transactions yet.">
+          Your Blockradar wallet has {fmtNum(s.total_wallets)} address{s.total_wallets === 1 ? '' : 'es'} and no successful transactions.
+          Churn scores, volume and dormancy fill in automatically after the first deposits or withdrawals.
+        </Banner>
       )}
 
       <div className="grid-kpi">
-        <StatCard loading={isLoading} label="Transaction volume" value={fmtUsd(s.total_volume_usd)}
-          sub={`${fmtNum(s.total_transactions)} successful transactions`} tone="accent" icon={DollarSign} />
-        <StatCard loading={isLoading} label="Wallets" value={fmtNum(s.total_wallets)}
-          sub={`${fmtNum(s.total_fintechs)} fintech${s.total_fintechs === 1 ? '' : 's'}`} tone="info" icon={Wallet} />
-        <StatCard loading={isLoading} label="Dormancy rate" value={fmtPct(s.dormancy_rate)}
-          sub={s.never_active_wallets ? `${fmtNum(s.never_active_wallets)} never active · 60-day window` : 'No activity in 60+ days'} tone="warn" icon={PauseCircle} />
-        <StatCard loading={isLoading} label="High churn risk" value={fmtNum(s.high_risk_fintechs)}
-          sub="Fintechs needing attention" tone="danger" icon={AlertTriangle} />
+        <StatCard loading={isLoading} label="Transaction volume" tone="accent"
+          value={<CountUp value={s.total_volume_usd} format={fmtUsd} />} sub={`${fmtNum(s.total_transactions)} successful transactions`} />
+        <StatCard loading={isLoading} label="Wallets" tone="info"
+          value={<CountUp value={s.total_wallets} format={v => fmtNum(Math.round(v))} />}
+          sub={`${fmtNum(s.total_fintechs)} fintech${s.total_fintechs === 1 ? '' : 's'}`} />
+        <StatCard loading={isLoading} label="Dormancy rate" tone="warn"
+          value={<CountUp value={s.dormancy_rate} format={v => fmtPct(v)} />}
+          sub={s.never_active_wallets ? `${fmtNum(s.never_active_wallets)} never active · 60-day window` : 'No activity in 60+ days'} />
+        <StatCard loading={isLoading} label="High churn risk" tone="danger"
+          value={<CountUp value={s.high_risk_fintechs} format={v => fmtNum(Math.round(v))} />}
+          sub={`${fmtNum(dist.Medium || 0)} medium · ${fmtNum(dist.Low || 0)} low · ${fmtNum(dist.Unknown || 0)} unknown`} />
       </div>
 
-      {top.length > 0 && (
-        <section aria-label="Top insights" style={{ display: 'grid', gap: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <h2 style={{ fontSize: 16, fontWeight: 700 }}>What needs your attention</h2>
-            <a href="#/insights" className="link" style={{ fontSize: 13 }}>See all {ins.data.length} →</a>
-          </div>
-          <InsightList insights={top} compact />
-        </section>
-      )}
+      <NeedsAttention />
 
-      <HealthCard />
-
-      <VolumeChart />
-
-      <div className="split">
-        <div className="stack-col">
-          <ChurnDonut />
-          <TypeBars />
-        </div>
-        <TopRiskList />
+      <div className="grid-2">
+        <HealthCard />
+        <VolumeChart />
       </div>
 
-      <RegionalCards />
+      <TypeBars columns />
     </div>
   )
 }

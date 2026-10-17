@@ -194,3 +194,36 @@ def test_invite_is_not_emailed_unless_asked_and_possible(client, mailbox):
     mailbox.enabled = False
     assert client.post("/workspace/invites", headers=admin, json={"email": "b@example.com", "send_email": True}).json()["emailed"] is False
     assert mailbox == []
+
+
+def test_a_refused_invite_email_is_reported_honestly_and_the_link_still_works(client, mailbox):
+    admin = register(client, "Admin")
+    mailbox.clear()
+    mailbox.fail = True                                    # e.g. an unverified sender domain: the provider says no
+    r = client.post("/workspace/invites", headers=admin, json={"email": "refused@example.com", "role": "member", "send_email": True})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["emailed"] is False and body["email_failed"] is True and body["token"]       # the admin can still copy the link
+    joined = client.post("/auth/register", json={"email": "refused@example.com", "password": "password123", "name": "R", "invite_token": body["token"]})
+    assert joined.status_code == 200
+    trail = [e["action"] for e in client.get("/workspace/audit", headers=admin).json()["data"]]
+    assert "invite.email_failed" in trail and "invite.created" in trail
+
+
+def test_no_failure_is_flagged_when_email_was_not_requested(client, mailbox):
+    admin = register(client, "Admin")
+    mailbox.fail = True
+    body = client.post("/workspace/invites", headers=admin, json={"email": "quiet@example.com"}).json()
+    assert body["emailed"] is False and body["email_failed"] is False
+
+
+def test_the_real_sender_returns_false_instead_of_raising_when_smtp_refuses(monkeypatch):
+    import asyncio, smtplib
+    from app.services import email as mailer
+
+    monkeypatch.setattr(mailer.settings, "email_backend", "smtp")
+    monkeypatch.setattr(mailer.settings, "smtp_host", "smtp.example.com")
+    def refuse(msg):
+        raise smtplib.SMTPRecipientsRefused({"x@example.com": (403, b"You can only send testing emails to your own address")})
+    monkeypatch.setattr(mailer, "_deliver_smtp", refuse)
+    assert asyncio.run(mailer.send_email("x@example.com", "Hi", "body")) is False

@@ -362,3 +362,11 @@ def test_export_lists_keys_without_secrets_and_deletion_removes_everything(clien
         assert db.query(ApiKey).filter(ApiKey.org_id == live["org"]).count() == 0
         assert db.query(CreditTransaction).filter(CreditTransaction.org_id == live["org"]).count() == 0
     assert client.get("/v1/health", headers=bearer(live["key"])).status_code == 401
+
+
+def test_the_price_list_is_public_and_matches_what_is_charged(client):
+    r = client.get("/v1/pricing")                                              # no key, no login
+    assert r.status_code == 200
+    body = r.json()
+    assert body["endpoints"] == apiaccess.ENDPOINT_COSTS and body["packs"] == apiaccess.TOPUP_PACKS and body["credit_usd"] == 0.001
+    assert "key" not in r.text.lower().replace("keys", "")

@@ -1,23 +1,34 @@
-import { AlertTriangle, TrendingDown, CheckCircle2, HelpCircle } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { useDistribution, useTypeBreakdown } from '../hooks/useAnalytics'
-import { PageHeader, StatCard, Card, EmptyState, ChartTooltip } from '../components/ui'
+import { useState } from 'react'
+import { useDistribution } from '../hooks/useAnalytics'
+import { PageHeader, Skeleton } from '../components/ui'
 import ChurnTable from '../components/ChurnTable'
 import TopRiskList from '../components/TopRiskList'
+import TypeBars from '../components/TypeBars'
 import RegionalCards from '../components/RegionalCards'
 import TrendsCard from '../components/TrendsCard'
 import ForecastCard from '../components/ForecastCard'
 import CohortsCard from '../components/CohortsCard'
 import { fmtNum } from '../lib/format'
 
+const TIERS = [
+  { key: 'High', label: 'High risk', tone: 'danger' },
+  { key: 'Medium', label: 'Medium risk', tone: 'warn' },
+  { key: 'Low', label: 'Low risk', tone: 'success' },
+  { key: 'Unknown', label: 'Not scored', tone: 'neutral' },
+]
+
 export default function Analytics() {
   const { data: dist = {}, isLoading } = useDistribution()
-  const { data: types = [] } = useTypeBreakdown()
+  const [risk, setRisk] = useState(null)
 
-  const high = dist.High || 0, medium = dist.Medium || 0, low = dist.Low || 0
-  const total = high + medium + low
-  const share = n => (total ? `${((n / total) * 100).toFixed(0)}% of scored fintechs` : 'No scored fintechs yet')
-  const byType = [...types].sort((a, b) => b.avg_volume_k - a.avg_volume_k)
+  const scored = (dist.High || 0) + (dist.Medium || 0) + (dist.Low || 0)
+  const sub = k => (k === 'Unknown' ? 'No transaction history yet' : scored ? `${(((dist[k] || 0) / scored) * 100).toFixed(0)}% of scored fintechs` : 'No scored fintechs yet')
+
+  // clicking a tile filters the table at the bottom of the page
+  const pick = k => {
+    setRisk(r => (r === k ? null : k))
+    requestAnimationFrame(() => document.getElementById('fintech-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }
 
   return (
     <div className="stack">
@@ -25,39 +36,27 @@ export default function Analytics() {
         Churn probability, risk distribution and fintech-level retention signals.
       </PageHeader>
 
-      <div className="grid-kpi">
-        <StatCard loading={isLoading} label="High risk"   value={fmtNum(high)}   sub={share(high)}   tone="danger"  icon={AlertTriangle} />
-        <StatCard loading={isLoading} label="Medium risk" value={fmtNum(medium)} sub={share(medium)} tone="warn"    icon={TrendingDown} />
-        <StatCard loading={isLoading} label="Low risk"    value={fmtNum(low)}    sub={share(low)}    tone="success" icon={CheckCircle2} />
-        <StatCard loading={isLoading} label="Not scored"  value={fmtNum(dist.Unknown)} sub="No transaction history yet" tone="neutral" icon={HelpCircle} />
+      <div className="grid-tiers">
+        {TIERS.map(t => isLoading ? <Skeleton key={t.key} height={120} /> : (
+          <button key={t.key} className={`tier-tile tone-${t.tone}`} aria-pressed={risk === t.key} onClick={() => pick(t.key)}>
+            <div className="tier-tile-label"><span className="dot" />{t.label}</div>
+            <div className="display tier-tile-value">{fmtNum(dist[t.key] || 0)}</div>
+            <div className="tier-tile-sub">{sub(t.key)}</div>
+          </button>
+        ))}
       </div>
 
       <TrendsCard />
-
       <ForecastCard />
 
-      <div className="grid-2">
-        <Card title="Average volume by fintech type" subtitle="USD (thousands)" chip="Per fintech">
-          {byType.length === 0 ? (
-            <EmptyState title="No type data yet">Tag addresses with a type in Blockradar metadata to compare segments.</EmptyState>
-          ) : (
-            <ResponsiveContainer width="100%" height={Math.max(180, byType.length * 44)}>
-              <BarChart data={byType} layout="vertical" margin={{ left: 0, right: 16, top: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
-                <XAxis type="number" tick={{ fill: 'var(--muted)', fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={v => `$${v}k`} />
-                <YAxis type="category" dataKey="type" tick={{ fill: 'var(--text-2)', fontSize: 12 }} axisLine={false} tickLine={false} width={110} />
-                <Tooltip content={<ChartTooltip valueFormatter={v => `$${v}k`} />} cursor={{ fill: 'var(--surface-2)' }} />
-                <Bar dataKey="avg_volume_k" name="Avg volume" fill="var(--emerald)" radius={[0, 6, 6, 0]} maxBarSize={22} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </Card>
+      <div className="grid-2" style={{ alignItems: 'stretch' }}>
+        <TypeBars title="Average volume by fintech type" subtitle="USD (thousands) per fintech" chip="Per fintech" />
         <TopRiskList />
       </div>
 
       <RegionalCards />
       <CohortsCard />
-      <ChurnTable />
+      <ChurnTable risk={risk} onRisk={setRisk} />
     </div>
   )
 }
