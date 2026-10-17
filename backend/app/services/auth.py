@@ -173,8 +173,14 @@ def get_current_user(
 
 _attempts: dict = defaultdict(deque)
 
+# Constants, not parameters: FastAPI turns a dependency's parameters into query parameters,
+# which would let a client raise its own limit (?limit=1000000).
+AUTH_LIMIT = 10
+AUTH_WINDOW = 60
 
-def rate_limit_auth(request: Request, limit: int = 10, window: int = 60) -> None:
+
+def rate_limit_auth(request: Request) -> None:
+    limit, window = AUTH_LIMIT, AUTH_WINDOW
     ip = request.client.host if request.client else "unknown"
     now = time.monotonic()
     q = _attempts[ip]

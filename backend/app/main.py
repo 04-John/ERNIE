@@ -26,6 +26,8 @@ async def lifespan(app: FastAPI):
     print(f"  Mode     : {settings.data_mode.upper()}")
     if settings.debug:
         print(f"  Docs     : http://localhost:{settings.api_port}/docs")
+    if settings.stripe_secret_key and not settings.stripe_webhook_secret:
+        print("  WARN STRIPE_WEBHOOK_SECRET is missing - payments stay off until it is set")
     print("=" * 55)
 
     from app.core.database import create_tables, SessionLocal

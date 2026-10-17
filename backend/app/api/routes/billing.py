@@ -64,7 +64,7 @@ async def checkout(req: CheckoutRequest, user: User = Depends(require_admin), db
 @router.post("/portal")
 async def portal(user: User = Depends(require_admin), db: Session = Depends(get_db)):
     org = _org(db, user)
-    if not billing.enabled() or not org.stripe_customer_id:
+    if not billing.api_ready() or not org.stripe_customer_id:   # customers must always be able to cancel
         raise HTTPException(status_code=400, detail="There's no billing account to manage yet.")
     try:
         url = await asyncio.to_thread(billing.portal_url, org)

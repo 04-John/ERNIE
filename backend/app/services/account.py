@@ -68,7 +68,7 @@ def export_workspace(db: Session, org: Organization) -> dict:
 
 def cancel_subscription(org: Organization) -> None:
     """Stop billing. Raises if Stripe can't be reached, so a workspace is never deleted while still being charged."""
-    if not org.stripe_subscription_id or not billing.enabled():
+    if not org.stripe_subscription_id or not billing.api_ready():
         return
     try:
         stripe.Subscription.cancel(org.stripe_subscription_id, api_key=get_settings().stripe_secret_key)

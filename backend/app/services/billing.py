@@ -25,17 +25,23 @@ def price_ids() -> dict:
     return {"pro": settings.stripe_price_pro, "business": settings.stripe_price_business}
 
 
-def enabled() -> bool:
-    return bool(settings.stripe_secret_key) and all(price_ids().values())
-
-
-def payments_enabled() -> bool:
-    """One-off payments (API credit top-ups) only need the secret key, not the subscription prices."""
+def api_ready() -> bool:
+    """Enough to call Stripe at all, e.g. to cancel a subscription or open the billing portal."""
     return bool(settings.stripe_secret_key)
 
 
 def webhook_enabled() -> bool:
     return bool(settings.stripe_secret_key and settings.stripe_webhook_secret)
+
+
+def payments_enabled() -> bool:
+    """Only take money when the signed webhook that delivers what was paid for (credits, a plan) can arrive."""
+    return webhook_enabled()
+
+
+def enabled() -> bool:
+    """Subscriptions: payments plus the plan prices."""
+    return payments_enabled() and all(price_ids().values())
 
 
 def plan_for_price(price_id: Optional[str]) -> Optional[str]:

@@ -93,6 +93,16 @@ def test_without_stripe_keys_billing_is_off_but_plans_are_public(client):
     assert client.post("/billing/webhook", content=b"{}").status_code == 503
 
 
+def test_payments_stay_off_until_the_webhook_can_deliver_what_was_paid_for(client, stripe_on, monkeypatch):
+    monkeypatch.setattr(billing.settings, "stripe_webhook_secret", "")
+    h = register(client)
+    assert client.get("/billing", headers=h).json()["enabled"] is False
+    assert client.post("/billing/checkout", headers=h, json={"plan": "pro"}).status_code == 503
+    assert client.post("/developer/topup", headers=h, json={"usd": 10}).status_code == 503
+    assert client.get("/developer", headers=h).json()["topups_available"] is False
+    assert stripe_on.sessions == []                                                # nobody was sent to pay
+
+
 def test_checkout_and_portal_need_a_signed_in_admin(client, stripe_on):
     assert client.post("/billing/checkout", json={"plan": "pro"}).status_code in (401, 403)
     assert client.post("/billing/portal").status_code in (401, 403)

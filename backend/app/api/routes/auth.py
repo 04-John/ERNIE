@@ -131,6 +131,12 @@ def register(req: RegisterRequest, background: BackgroundTasks, db: Session = De
 
 @router.post("/login", response_model=TokenResponse, dependencies=[Depends(rate_limit_auth)])
 def login(req: LoginRequest, db: Session = Depends(get_db)):
+    # per address as well as per IP, so password guessing can't be spread across many IPs
+    if not rate_limit_key(f"login:{req.email.strip().lower()}", 10, 15 * 60):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many attempts for this account. Try again in 15 minutes.",
+        )
     user = authenticate_user(db, req.email, req.password)
 
     if not user:
