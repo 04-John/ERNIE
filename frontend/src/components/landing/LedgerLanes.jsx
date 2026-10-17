@@ -80,7 +80,7 @@ export default function LedgerLanes({ sound }) {
         if (n % 2 === 0 && !compact) { ctx.fillStyle = `rgba(111,127,144,${0.75 * a})`; ctx.fillText('#' + (1287400 + n).toLocaleString('en-US'), x, Y0 - 22) }
       }
       ctx.textAlign = 'left'; ctx.font = '600 10px Geist, system-ui'; ctx.fillStyle = col.muted; ctx.letterSpacing = '1.2px'
-      ctx.fillText('FINTECH', 0, 18); ctx.fillText(compact ? 'ON-CHAIN ACTIVITY' : 'ON-CHAIN ACTIVITY  ·  1 BLOCK = 1 SUCCESSFUL TX', X0, 18)
+      ctx.fillText('FINTECH', 0, 18); ctx.fillText(compact ? 'ACTIVITY' : 'ON-CHAIN ACTIVITY  ·  1 BLOCK = 1 SUCCESSFUL TX', X0, 18)
       if (!compact) ctx.fillText('SILENCE ÷ RHYTHM', X1 + 24, 18)
       ctx.fillText('RISK', BX, 18); ctx.letterSpacing = '0px'
 

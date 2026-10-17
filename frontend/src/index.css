@@ -124,7 +124,7 @@ code, pre, .mono { font-family: var(--font-mono); }
   width: var(--sidebar-w); flex-shrink: 0;
   background: var(--bg-elevated);
   border-right: 1px solid var(--border);
-  height: 100vh; position: sticky; top: 0;
+  height: 100vh; height: 100dvh; position: sticky; top: 0;      /* dvh: on phones the browser's toolbar must not cover the bottom of the menu */
   display: flex; flex-direction: column;
   padding: 18px 14px;
   z-index: 60;
@@ -514,7 +514,7 @@ textarea.input { height: auto; padding: 12px 14px; line-height: 1.5; resize: ver
 .event-dot { width: 7px; height: 7px; margin-top: 6px; flex: none; border-radius: 50%; }
 
 /* ═══ Fintech drawer ═══ */
-.drawer-scrim { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.6); backdrop-filter: blur(2px); transition: opacity .35s; }
+.drawer-scrim { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.6); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); transition: opacity .35s; }
 .drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 61; width: min(560px, 100vw); background: var(--bg-elevated); border-left: 1px solid var(--border-strong);
   transition: transform .5s cubic-bezier(.2,.8,.2,1), box-shadow .5s; overflow-y: auto; }
 .drawer-body { padding: 22px 26px 40px; display: flex; flex-direction: column; gap: 20px; }
@@ -624,3 +624,13 @@ label.field > span { font-size: 13px; font-weight: 600; color: var(--text-2); }
 .invite-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); flex-wrap: wrap; }
 .channel-row { padding: 14px 16px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); }
 .kv-row { font-size: 14px; }
+
+/* ═══ Small screens ═══ */
+/* iOS Safari zooms the page when a field under 16px is focused. Touch screens get 16px fields so it never does. */
+@media (pointer: coarse) { input, select, textarea, .input { font-size: 16px; } }
+.insight { min-width: 0; }
+.insight .chip { white-space: normal; text-align: left; line-height: 1.4; }
+.insight-title, .insight-detail { overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .insight { padding: 16px; gap: 12px; }
+}

@@ -80,5 +80,5 @@ export function InsightList({ insights, empty }) {
       <div className="insight-empty">Nothing here. ERNIE checks again after every sync.</div>
     )
   }
-  return <div style={{ display: 'grid', gap: 12 }}>{insights.map(i => <InsightCard key={i.key} insight={i} names={names} />)}</div>
+  return <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'minmax(0, 1fr)' }}>{insights.map(i => <InsightCard key={i.key} insight={i} names={names} />)}</div>
 }
