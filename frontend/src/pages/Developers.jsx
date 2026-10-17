@@ -47,7 +47,7 @@ const ENDPOINTS = [
   "total": 12, "limit": 5, "offset": 0,
   "data": [{
     "id": "fin_01", "name": "OmniPay", "region": "West Africa", "type": "Payments",
-    "risk": "High", "risk_probability": 0.74,
+    "risk": "High", "risk_probability": 0.6164,
     "days_since_last_transaction": 41, "transactions": 1840,
     "total_volume_usd": 508213.4,
     "volume_last_3_months_usd": 51230.0, "volume_previous_3_months_usd": 214900.0,
@@ -57,25 +57,25 @@ const ENDPOINTS = [
   { id: 'fintechs.get', path: '/v1/fintechs/{id}', desc: 'One fintech with the reasons behind its score, so you can show your team why it was flagged.',
     params: [['id', 'The fintech id from the list']],
     sample: `{
-  "id": "fin_01", "name": "OmniPay", "risk": "High", "risk_probability": 0.74,
+  "id": "fin_01", "name": "OmniPay", "risk": "High", "risk_probability": 0.6164,
   "score_breakdown": [{
-    "signal": "Silence vs its usual rhythm", "weight": 0.4, "contribution": 0.31,
+    "signal": "Silence vs its usual rhythm", "weight": 0.35, "contribution": 0.35,
     "detail": "Usually transacts every ~2 days; silent for 41 (20.5x its usual gap)"
   }]
 }` },
   { id: 'health', path: '/v1/health', desc: 'The retention health score (0 to 100) and what drives it.', params: [],
     sample: `{
   "score": 82, "grade": "Strong", "volume_change_28d": -0.04,
-  "components": [{ "name": "Wallet activation", "value": 100, "detail": "100% of wallets have transacted" }]
+  "components": [{ "name": "Wallet activation", "value": 1.0, "detail": "100% of wallets have transacted" }]
 }` },
   { id: 'insights', path: '/v1/insights', desc: 'Current findings, most important first, each with a suggested next step.', params: [],
     sample: `{
   "data": [{
-    "severity": "critical", "kind": "volume_drop",
+    "severity": "critical", "kind": "fintech_volume_drop",
     "title": "3 fintechs cut volume by half or more",
-    "detail": "FlowPay: $51.3k to $64 in 4 weeks.",
-    "suggested_next_step": "Ask what changed before they stop completely.",
-    "fintech_ids": ["fin_07"]
+    "detail": "FlowPay: $51.3k to $6.4k in 4 weeks (-88%). Together they lost $97.2k.",
+    "suggested_next_step": "Ask what changed (pricing, product, integration issues) before they stop completely.",
+    "fintech_ids": ["fin_07", "fin_03", "fin_11"]
   }]
 }` },
   { id: 'history', path: '/v1/history', desc: 'Daily headline metrics for charts. Window is limited by your plan.',

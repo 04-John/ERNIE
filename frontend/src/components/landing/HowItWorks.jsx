@@ -6,15 +6,15 @@ const STEPS = [
   { n: '01', title: 'Connect your wallet', text: 'Paste your Blockradar wallet ID and API key. ERNIE checks them with Blockradar before saving and encrypts the key at rest. Access is read-only, so ERNIE can look but can never move funds.', meta: 'Fernet encryption · last 4 shown · read-only' },
   { n: '02', title: 'Read the chain', text: "Each child address becomes a fintech. ERNIE pulls successful deposits and withdrawals, ignores internal sweeps and never invents a region or type. Later syncs are incremental and only stop early when it's provably safe.", meta: 'every 6 h · on demand · up to 40,000 tx' },
   { n: '03', title: 'Judge each fintech by its own rhythm', text: "Silence only means something against a baseline. ERNIE compares the days since a fintech's last transaction with its own 90th-percentile gap between active days. A daily payer that goes quiet for a week is a risk. A bursty one isn't.", meta: '≤ 2× normal · ≥ 8× maximum risk' },
-  { n: '04', title: 'Explain every point', text: "Four signals add up to a probability between 0 and 1. The fintech page shows exactly how many points each one contributed, so your team never has to trust a black box. Scores are absolute: one fintech never moves another's.", meta: 'High ≥ 0.60 · Medium ≥ 0.30 · Unknown if no tx' },
+  { n: '04', title: 'Explain every point', text: "Four signals add up to a risk score between 0 and 1. The fintech page shows exactly how many points each one contributed, so your team never has to trust a black box. Scores are absolute: one fintech never moves another's.", meta: 'High ≥ 0.60 · Medium ≥ 0.30 · Unknown if no tx' },
   { n: '05', title: 'Alert on changes, not noise', text: 'After every sync ERNIE compares each tier with the last one. When a fintech turns High or recovers, you get one digest per channel. A fintech that keeps flipping gets at most one alert every 24 hours.', meta: 'email · Slack · HMAC-signed webhook' },
 ]
 
 const PARTS = [
-  ['Silence vs its own rhythm', '35%', '+0.35', 100, 'Silent 15 days, 6.2× its usual gap'],
+  ['Silence vs its own rhythm', '35%', '+0.31', 88, 'Silent 15 days, 7.3× its usual gap'],
   ['Volume trend', '25%', '+0.18', 72, 'Down 72% on the previous 3 months'],
   ['Dormant wallets', '20%', '+0.12', 60, '6 of 10 wallets quiet for 60+ days'],
-  ['Low activity', '20%', '+0.06', 30, 'Fewer than 20 successful transactions this quarter'],
+  ['Low activity', '20%', '+0.10', 50, 'Fewer than 20 successful transactions in total'],
 ]
 
 function Visual({ i, active }) {
@@ -46,8 +46,8 @@ function Visual({ i, active }) {
       )}
       {i === 2 && (
         <div className="ln-vis-pad center" style={{ gap: 28 }}>
-          <div className="ln-vs mono">Same 7 days of silence. Two different answers.</div>
-          {[['Kora Pay', 'pays daily · p90 gap 1d', '7.0× · High', 'tier-high', 18], ['Baobab Pay', 'bursty · p90 gap 10d', '0.7× · Low', 'tier-low', 3]].map(([name, sub, ratio, tier, ticks]) => (
+          <div className="ln-vs mono">Same 8 days of silence. Two different answers.</div>
+          {[['Kora Pay', 'pays daily · p90 gap 1d', '8.0× · maximum', 'tier-high', 18], ['Baobab Pay', 'bursty · p90 gap 10d', '0.8× · normal', 'tier-low', 3]].map(([name, sub, ratio, tier, ticks]) => (
             <div key={name} className={tier}>
               <div className="ln-rhythm-head"><span>{name} <span className="mono ln-dim">· {sub}</span></span><span className="mono" style={{ color: 'var(--tone)', fontWeight: 600 }}>{ratio}</span></div>
               <svg viewBox="0 0 400 44" width="100%" height="56" style={{ marginTop: 10, display: 'block' }}>
@@ -85,7 +85,7 @@ function Visual({ i, active }) {
           <div className="ln-card-in">
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span className="ln-app" /><b>ERNIE</b><span className="ln-tag">APP</span><span className="ln-vs" style={{ margin: 0 }}>#retention · 09:41</span></div>
             <div style={{ marginTop: 12, font: '600 14px var(--font)' }}>1 fintech turned High risk</div>
-            <div className="ln-alert-line"><i style={{ background: 'var(--danger)' }} /><span><b>NovaRemit</b> · 0.71 · silent 6.2× its usual gap, volume down 72%</span></div>
+            <div className="ln-alert-line"><i style={{ background: 'var(--danger)' }} /><span><b>NovaRemit</b> · 0.71 · silent 7.3× its usual gap, volume down 72%</span></div>
             <div className="ln-alert-line"><i style={{ background: 'var(--success)' }} /><span><b>ClearVault</b> recovered from High</span></div>
           </div>
           <div className="ln-card-in mono" style={{ whiteSpace: 'pre', overflow: 'hidden', font: '500 12px/1.8 var(--font-mono)', color: 'var(--text-2)' }}>

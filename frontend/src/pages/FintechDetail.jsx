@@ -39,7 +39,7 @@ function WhyCard({ fintech }) {
         ))}
       </div>
       <p className="hint" style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-        Probability is the sum of these points. High is 0.60 or more and Medium is 0.30 or more. The score never depends on other fintechs,
+        The score is the sum of these points. High is 0.60 or more and Medium is 0.30 or more. The score never depends on other fintechs,
         so it only changes when this fintech's own behaviour does. It is a transparent heuristic, not a trained model.
       </p>
     </Card>
@@ -109,7 +109,7 @@ export default function FintechDetail({ param }) {
                 <ReferenceLine y={0.6} stroke="var(--danger)" strokeDasharray="4 4" />
                 <ReferenceLine y={0.3} stroke="var(--warn)" strokeDasharray="4 4" />
                 <Tooltip content={<ChartTooltip valueFormatter={v => `${(v * 100).toFixed(0)}%`} />} cursor={{ stroke: 'var(--border-strong)' }} />
-                <Area type="monotone" dataKey="probability" name="Churn probability" stroke="#FF6B78" strokeWidth={2.2} fill="url(#riskFill)" />
+                <Area type="monotone" dataKey="probability" name="Risk score" stroke="#FF6B78" strokeWidth={2.2} fill="url(#riskFill)" />
               </AreaChart>
             </ResponsiveContainer>
           )}

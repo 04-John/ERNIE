@@ -30,7 +30,7 @@ export default function NeedsAttention() {
       <div className="panel-head">
         <div style={{ flex: '1 1 auto', minWidth: 0 }}>
           <h2 className="section-title">Needs attention</h2>
-          <div className="panel-sub">Ranked by churn probability · each with the reason it's here</div>
+          <div className="panel-sub">Ranked by risk score · each with the reason it's here</div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {dist.High > 0 && <span className="count-pill tier-high">{dist.High} High</span>}

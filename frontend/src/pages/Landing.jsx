@@ -14,7 +14,7 @@ const SECURITY = [
   ['FERNET · SHA-256', 'Keys encrypted at rest', 'Blockradar keys are encrypted and only the last 4 characters are ever shown. API keys are stored as hashes and shown once.'],
   ['TENANT ISOLATION', 'Isolated workspaces', 'Every table is keyed by workspace, and a test suite checks reads, writes, keys and deletes across workspaces.'],
   ['HMAC · SSRF GUARD', 'Signed, constrained webhooks', 'Webhooks only go to public HTTPS addresses on port 443, which are re-checked on every send. Redirects are never followed.'],
-  ['STRIPE-HOSTED', 'Cards never touch ERNIE', 'Plans and credits change only through a verified Stripe webhook. The browser can’t change them.'],
+  ['STRIPE-HOSTED', 'Cards never touch ERNIE', 'Credits are only added by a verified Stripe webhook. Plans change through Stripe or an ERNIE admin, never from a customer’s browser, and every change is logged.'],
   ['OPT-IN AI', 'Ask ERNIE, on your terms', 'The assistant is off by default. When an admin turns it on, it only sees totals and scores, never wallet addresses, keys or emails.'],
 ]
 
@@ -278,7 +278,7 @@ export default function Landing({ onLogin, onSignup }) {
               <pre className="mono">
                 <span className="dim">$</span> curl $ERNIE_API/v1/fintechs/ft_8f2a \{'\n'}    -H <span className="g">&quot;Authorization: Bearer ernie_live_…&quot;</span>{'\n\n'}
                 <span className="dim">HTTP/1.1 200{'\n'}X-Credits-Charged: 10{'\n'}X-Credits-Remaining: 54,990</span>{'\n\n'}
-                {'{'}{'\n'}  &quot;fintech_name&quot;: <span className="g">&quot;NovaRemit&quot;</span>,{'\n'}  &quot;churn_risk&quot;: <span className="r">&quot;High&quot;</span>,{'\n'}  &quot;churn_probability&quot;: <span className="b">0.71</span>,{'\n'}  &quot;days_since_last_tx&quot;: <span className="b">15.0</span>,{'\n'}  &quot;breakdown&quot;: [{'\n'}    {'{ "key": '}<span className="g">&quot;recency&quot;</span>{',  "points": '}<span className="b">0.35</span>{' },'}{'\n'}    {'{ "key": '}<span className="g">&quot;trend&quot;</span>{',    "points": '}<span className="b">0.18</span>{' },'}{'\n'}    {'{ "key": '}<span className="g">&quot;dormancy&quot;</span>{', "points": '}<span className="b">0.12</span>{' },'}{'\n'}    {'{ "key": '}<span className="g">&quot;activity&quot;</span>{', "points": '}<span className="b">0.06</span>{' }'}{'\n'}  ]{'\n'}{'}'}
+                {'{'}{'\n'}  &quot;id&quot;: <span className="g">&quot;ft_8f2a&quot;</span>,{'\n'}  &quot;name&quot;: <span className="g">&quot;NovaRemit&quot;</span>,{'\n'}  &quot;risk&quot;: <span className="r">&quot;High&quot;</span>,{'\n'}  &quot;risk_probability&quot;: <span className="b">0.7092</span>,{'\n'}  &quot;days_since_last_transaction&quot;: <span className="b">15</span>,{'\n'}  <span className="dim">…</span>{'\n'}  &quot;score_breakdown&quot;: [{'\n'}    {'{ "signal": '}<span className="g">&quot;Silence vs its usual rhythm&quot;</span>{', "contribution": '}<span className="b">0.3092</span>{' },'}{'\n'}    {'{ "signal": '}<span className="g">&quot;Dormant wallets&quot;</span>{', "contribution": '}<span className="b">0.12</span>{' },'}{'\n'}    {'{ "signal": '}<span className="g">&quot;Volume trend&quot;</span>{', "contribution": '}<span className="b">0.18</span>{' },'}{'\n'}    {'{ "signal": '}<span className="g">&quot;Low activity&quot;</span>{', "contribution": '}<span className="b">0.1</span>{' }'}{'\n'}  ]{'\n'}{'}'}
               </pre>
             </Reveal>
           </div>

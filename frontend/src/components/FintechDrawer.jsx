@@ -96,7 +96,7 @@ function Content({ id }) {
                 )
               })}
             </div>
-            <p className="drawer-note">Probability is the sum of these points. High is 0.60 or more and Medium is 0.30 or more. The score only changes when this fintech's own behaviour does.</p>
+            <p className="drawer-note">The score is the sum of these points. High is 0.60 or more and Medium is 0.30 or more. The score only changes when this fintech's own behaviour does.</p>
           </>
         )}
       </section>

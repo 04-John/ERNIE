@@ -33,7 +33,7 @@ export default function Analytics() {
   return (
     <div className="stack">
       <PageHeader eyebrow="Analytics" title="Risk intelligence">
-        Churn probability, risk distribution and fintech-level retention signals.
+        Churn risk scores, risk distribution and fintech-level retention signals.
       </PageHeader>
 
       <div className="grid-tiers">

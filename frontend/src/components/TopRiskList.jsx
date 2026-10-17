@@ -15,7 +15,7 @@ export default function TopRiskList({ count = 5 }) {
   const top = (data?.data || []).filter(f => f.churn_risk !== 'Unknown').slice(0, count)
 
   return (
-    <Card title="Most at risk" subtitle="Highest churn probability" chip={`Top ${count}`} className="type-card">
+    <Card title="Most at risk" subtitle="Highest risk scores" chip={`Top ${count}`} className="type-card">
       {top.length === 0 ? (
         <EmptyState icon={ShieldCheck} title="Nothing to flag yet">
           Risk is scored once a fintech has transaction history.

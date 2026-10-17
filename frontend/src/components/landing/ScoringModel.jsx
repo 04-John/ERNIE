@@ -11,7 +11,7 @@ const tierOf = p => (p >= 0.6 ? 'High' : p >= 0.3 ? 'Medium' : 'Low')
 /**
  * The real scoring model from churn_engine.py, interactive. Move an input and watch each signal add its share:
  *   recency = .35 x clamp((days / gap - 2) / 6), trend = .25 x clamp(-change), dormancy = .20 x share, activity = .20 x (<5 tx: 1, <20: .5, else 0)
- *   probability = the sum. High at 0.60, Medium at 0.30.
+ *   score = the sum. High at 0.60, Medium at 0.30.
  */
 export default function ScoringModel({ sound }) {
   const [days, setDays] = useState(15)
@@ -83,7 +83,7 @@ export default function ScoringModel({ sound }) {
             </div>
           ))}
         </div>
-        <p className="ln-foot">Probability is the sum of the four signals. It's a transparent heuristic, not a trained model, and daily scores are stored so one can be trained later.</p>
+        <p className="ln-foot">The score is the sum of the four signals. It's a transparent heuristic, not a trained model, and daily scores are stored so one can be trained later.</p>
       </div>
     </div>
   )
